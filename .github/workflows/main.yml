@@ -1,36 +1,42 @@
-# This is a basic workflow to help you get started with Actions
+name: System Pro Compiler Engine V2.0
 
-name: CI
-
-# Controls when the workflow will run
 on:
-  # Triggers the workflow on push or pull request events but only for the "main" branch
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
+    inputs:
+      apk_name:
+        description: 'Name of the APK file to process'
+        required: true
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "build"
-  build:
-    # The type of runner that the job will run on
+  decompile:
     runs-on: ubuntu-latest
-
-    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-      # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: echo Hello, world!
+      - name: Setup Java Environment
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
 
-      # Runs a set of commands using the runners shell
-      - name: Run a multi-line script
+      - name: Install JADX (Powerful Decompiler)
         run: |
-          echo Add other actions to build,
-          echo test, and deploy your project.
+          sudo apt-get update
+          wget https://github.com/skylot/jadx/releases/download/v1.5.0/jadx-1.5.0.zip
+          unzip jadx-1.5.0.zip -d jadx_bin
+          echo "$(pwd)/jadx_bin/bin" >> $GITHUB_PATH
+
+      - name: Process APK
+        run: |
+          mkdir -p output/sources
+          # فرض کریں آپ کی APK فائل 'uploads' فولڈر میں ہے
+          jadx -d output/sources uploads/${{ github.event.inputs.apk_name }} || echo "Partial success"
+
+      - name: Save Results to Repository
+        run: |
+          git config --local user.email "systempro@bot.com"
+          git config --local user.name "System Pro Engine"
+          git add output/
+          git commit -m "Decompiled: ${{ github.event.inputs.apk_name }}"
+          git push
