@@ -1,42 +1,43 @@
-name: System Pro Compiler Engine V2.0
-
+name: System Pro Powerful Engine
 on:
   workflow_dispatch:
     inputs:
       apk_name:
-        description: 'Name of the APK file to process'
+        description: 'APK File Name'
         required: true
 
 jobs:
-  decompile:
+  compiler:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
+      - name: 1. کوڈ چیک آؤٹ کریں
         uses: actions/checkout@v4
 
-      - name: Setup Java Environment
+      - name: 2. جاوا سیٹ اپ کریں
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Install JADX (Powerful Decompiler)
+      - name: 3. JADX انجن انسٹال کریں
         run: |
           sudo apt-get update
           wget https://github.com/skylot/jadx/releases/download/v1.5.0/jadx-1.5.0.zip
           unzip jadx-1.5.0.zip -d jadx_bin
           echo "$(pwd)/jadx_bin/bin" >> $GITHUB_PATH
 
-      - name: Process APK
+      - name: 4. ڈی کمپائلنگ شروع کریں (Log Visibility)
         run: |
           mkdir -p output/sources
-          # فرض کریں آپ کی APK فائل 'uploads' فولڈر میں ہے
-          jadx -d output/sources uploads/${{ github.event.inputs.apk_name }} || echo "Partial success"
+          echo "Processing: ${{ github.event.inputs.apk_name }}"
+          # اگر فائل روٹ میں ہے تو یہ کمانڈ چلے گی
+          jadx -d output/sources "${{ github.event.inputs.apk_name }}" --show-bad-code
+        continue-on-error: true
 
-      - name: Save Results to Repository
+      - name: 5. نتائج کو محفوظ کریں
         run: |
-          git config --local user.email "systempro@bot.com"
-          git config --local user.name "System Pro Engine"
+          git config --local user.email "action@github.com"
+          git config --local user.name "System Pro Bot"
           git add output/
-          git commit -m "Decompiled: ${{ github.event.inputs.apk_name }}"
+          git commit -m "Results for ${{ github.event.inputs.apk_name }}" || echo "No changes"
           git push
