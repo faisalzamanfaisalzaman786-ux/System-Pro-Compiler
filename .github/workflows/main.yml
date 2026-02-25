@@ -10,34 +10,32 @@ jobs:
   compiler:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. کوڈ چیک آؤٹ کریں
+      - name: 1. Checkout Code
         uses: actions/checkout@v4
 
-      - name: 2. جاوا سیٹ اپ کریں
+      - name: 2. Setup Java
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 3. JADX انجن انسٹال کریں
+      - name: 3. Install JADX
         run: |
           sudo apt-get update
           wget https://github.com/skylot/jadx/releases/download/v1.5.0/jadx-1.5.0.zip
           unzip jadx-1.5.0.zip -d jadx_bin
           echo "$(pwd)/jadx_bin/bin" >> $GITHUB_PATH
 
-      - name: 4. ڈی کمپائلنگ شروع کریں (Log Visibility)
+      - name: 4. Decompile APK
         run: |
-          mkdir -p output/sources
-          echo "Processing: ${{ github.event.inputs.apk_name }}"
-          # اگر فائل روٹ میں ہے تو یہ کمانڈ چلے گی
-          jadx -d output/sources "${{ github.event.inputs.apk_name }}" --show-bad-code
-        continue-on-error: true
+          mkdir -p output
+          # JADX کمانڈ جو سورس کوڈ نکالے گی
+          jadx -d output "${{ github.event.inputs.apk_name }}" || echo "Partial Success"
 
-      - name: 5. نتائج کو محفوظ کریں
+      - name: 5. Save Results
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "System Pro Bot"
           git add output/
-          git commit -m "Results for ${{ github.event.inputs.apk_name }}" || echo "No changes"
+          git commit -m "Decompiled results for ${{ github.event.inputs.apk_name }}" || echo "No changes"
           git push
