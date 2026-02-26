@@ -1,4 +1,4 @@
-name: System Pro Engine V2
+name: System Pro Zip Engine
 on:
   workflow_dispatch:
     inputs:
@@ -7,7 +7,7 @@ on:
         required: true
 
 jobs:
-  decompile:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -19,33 +19,33 @@ jobs:
           java-version: '17'
           distribution: 'zulu'
 
-      - name: Decompile Process
+      - name: Install Decompiler Tools
         run: |
           sudo apt-get update
           sudo apt-get install -y apktool
           wget https://github.com/skylot/jadx/releases/download/v1.4.7/jadx-1.4.7.zip
           unzip jadx-1.4.7.zip -d jadx-tool
-          
-          APK_FILE="${{ github.event.inputs.apk_name }}"
-          
-          if [ -f "$APK_FILE" ]; then
-            mkdir -p output/sources
-            apktool d "$APK_FILE" -o output/res_temp -f
-            ./jadx-tool/bin/jadx -d output/sources "$APK_FILE" --no-res
-            
-            # Organize files
-            mv output/res_temp/AndroidManifest.xml output/ 2>/dev/null || true
-            mv output/res_temp/res output/resources 2>/dev/null || true
-            rm -rf output/res_temp
-          else
-            echo "Error: $APK_FILE not found in repo"
-            exit 1
-          fi
 
-      - name: Save Results
+      - name: Process Decompilation
+        run: |
+          APK_FILE="${{ github.event.inputs.apk_name }}"
+          # فولڈرز بنانا
+          mkdir -p output/src
+          # ریسورسز ڈی کمپائل کرنا
+          apktool d "$APK_FILE" -o output/res -f
+          # جاوا کوڈ ڈی کمپائل کرنا
+          ./jadx-tool/bin/jadx -d output/src "$APK_FILE" --no-res
+          
+          # زپ فائل بنانا
+          cd output
+          zip -r ../decompiled_result.zip .
+          cd ..
+
+      - name: Push ZIP to Repo
         run: |
           git config --global user.name "System-Pro-Bot"
           git config --global user.email "bot@systempro.com"
-          git add output/
-          git commit -m "Results for ${{ github.event.inputs.apk_name }}"
+          # پرانی زپ ہٹانا اور نئی شامل کرنا
+          git add decompiled_result.zip
+          git commit -m "Results ready: ${{ github.event.inputs.apk_name }}"
           git push
