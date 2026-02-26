@@ -1,38 +1,45 @@
-name: APK Decompile Engine
+name: Decompile APK
 
 on:
   workflow_dispatch:
     inputs:
       apk_name:
-        description: "APK File Name"
+        description: 'APK file name'
         required: true
 
 jobs:
   decompile:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout Repo
-      uses: actions/checkout@v3
+      - name: Checkout repo
+        uses: actions/checkout@v3
 
-    - name: Install Java
-      uses: actions/setup-java@v3
-      with:
-        distribution: 'temurin'
-        java-version: '17'
+      - name: Set up Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '11'
 
-    - name: Install APKTool
-      run: |
-        sudo apt update
-        sudo apt install apktool -y
+      - name: Install Apktool
+        run: |
+          wget https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool
+          chmod +x apktool
+          sudo mv apktool /usr/local/bin/
 
-    - name: Decompile APK
-      run: |
-        mkdir output
-        apktool d ${{ github.event.inputs.apk_name }} -o output
+      - name: Download APK from repo
+        run: |
+          cp "${{ github.event.inputs.apk_name }}" ./input.apk
 
-    - name: Upload Output
-      uses: actions/upload-artifact@v3
-      with:
-        name: DecompiledFiles
-        path: output
+      - name: Decompile APK
+        run: |
+          apktool d input.apk -o decompiled/
+
+      - name: Create result archive
+        run: |
+          cd decompiled && zip -r ../decompiled.zip ./*
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: decompiled-apk
+          path: decompiled.zip
