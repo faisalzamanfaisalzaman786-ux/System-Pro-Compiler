@@ -1,4 +1,4 @@
-name: System Pro Zip Engine
+name: System Pro Engine
 on:
   workflow_dispatch:
     inputs:
@@ -7,7 +7,7 @@ on:
         required: true
 
 jobs:
-  build:
+  decompile:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -19,33 +19,25 @@ jobs:
           java-version: '17'
           distribution: 'zulu'
 
-      - name: Install Decompiler Tools
+      - name: Install Decompiler
         run: |
           sudo apt-get update
           sudo apt-get install -y apktool
           wget https://github.com/skylot/jadx/releases/download/v1.4.7/jadx-1.4.7.zip
           unzip jadx-1.4.7.zip -d jadx-tool
 
-      - name: Process Decompilation
+      - name: Run Engine
         run: |
           APK_FILE="${{ github.event.inputs.apk_name }}"
-          # فولڈرز بنانا
           mkdir -p output/src
-          # ریسورسز ڈی کمپائل کرنا
           apktool d "$APK_FILE" -o output/res -f
-          # جاوا کوڈ ڈی کمپائل کرنا
           ./jadx-tool/bin/jadx -d output/src "$APK_FILE" --no-res
-          
-          # زپ فائل بنانا
-          cd output
-          zip -r ../decompiled_result.zip .
-          cd ..
+          cd output && zip -r ../decompiled_result.zip . && cd ..
 
-      - name: Push ZIP to Repo
+      - name: Push Result
         run: |
-          git config --global user.name "System-Pro-Bot"
-          git config --global user.email "bot@systempro.com"
-          # پرانی زپ ہٹانا اور نئی شامل کرنا
+          git config --global user.name "bot"
+          git config --global user.email "bot@system.pro"
           git add decompiled_result.zip
-          git commit -m "Results ready: ${{ github.event.inputs.apk_name }}"
-          git push
+          git commit -m "Finish"
+          git push --force
