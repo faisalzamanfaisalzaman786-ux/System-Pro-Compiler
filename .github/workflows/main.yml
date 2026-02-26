@@ -1,43 +1,36 @@
-name: System Pro Engine
+name: Smart Studio – Code to APK
+
 on:
-  workflow_dispatch:
-    inputs:
-      apk_name:
-        description: 'APK Name'
-        required: true
+  repository_dispatch:
+    types: [build-apk]
 
 jobs:
-  decompile:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Set up Java
-        uses: actions/setup-java@v3
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
         with:
+          distribution: 'temurin'
           java-version: '17'
-          distribution: 'zulu'
 
-      - name: Install Decompiler
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install ImageMagick (icon conversion)
         run: |
           sudo apt-get update
-          sudo apt-get install -y apktool
-          wget https://github.com/skylot/jadx/releases/download/v1.4.7/jadx-1.4.7.zip
-          unzip jadx-1.4.7.zip -d jadx-tool
+          sudo apt-get install -y imagemagick
 
-      - name: Run Engine
+      - name: Decode and convert icon to PNG
         run: |
-          APK_FILE="${{ github.event.inputs.apk_name }}"
-          mkdir -p output/src
-          apktool d "$APK_FILE" -o output/res -f
-          ./jadx-tool/bin/jadx -d output/src "$APK_FILE" --no-res
-          cd output && zip -r ../decompiled_result.zip . && cd ..
+          echo "${{ github.event.client_payload.app_icon }}" | base64 -d > icon_raw
+          convert icon_raw -resize 512x512! icon.png
 
-      - name: Push Result
-        run: |
-          git config --global user.name "bot"
-          git config --global user.email "bot@system.pro"
-          git add decompiled_result.zip
-          git commit -m "Finish"
-          git push --force
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
