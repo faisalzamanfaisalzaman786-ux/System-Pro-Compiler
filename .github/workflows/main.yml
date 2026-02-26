@@ -3,32 +3,54 @@ on:
   workflow_dispatch:
     inputs:
       apk_name:
-        description: 'APK File Name'
+        description: 'APK File Name (Make sure it exists in repo)'
         required: true
+
 jobs:
   decompile:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
       - name: Set up Java
         uses: actions/setup-java@v3
         with:
           java-version: '17'
           distribution: 'zulu'
-      - name: Decompile
+
+      - name: Install Tools
         run: |
+          sudo apt-get update
           sudo apt-get install -y apktool
           wget https://github.com/skylot/jadx/releases/download/v1.4.7/jadx-1.4.7.zip
           unzip jadx-1.4.7.zip -d jadx-tool
+
+      - name: Decompile APK
+        run: |
+          # یہاں ہم نے نام کے گرد " " لگائے ہیں تاکہ اسپیس کا مسئلہ نہ ہو
+          APK_FILE="${{ github.event.inputs.apk_name }}"
+          
+          if [ ! -f "$APK_FILE" ]; then
+            echo "Error: $APK_FILE not found in the repository root!"
+            exit 1
+          fi
+
           mkdir -p output/sources
-          apktool d "${{ github.event.inputs.apk_name }}" -o output/res_temp -f
-          ./jadx-tool/bin/jadx -d output/sources "${{ github.event.inputs.apk_name }}" --no-res
-          mv output/res_temp/AndroidManifest.xml output/ 2>/dev/null || true
-          mv output/res_temp/res output/resources 2>/dev/null || true
+          # Decompile Resources
+          apktool d "$APK_FILE" -o output/res_temp -f
+          # Decompile Java Code
+          ./jadx-tool/bin/jadx -d output/sources "$APK_FILE" --no-res
+          
+          # Move important files
+          [ -f output/res_temp/AndroidManifest.xml ] && mv output/res_temp/AndroidManifest.xml output/
+          [ -d output/res_temp/res ] && mv output/res_temp/res output/resources
+          rm -rf output/res_temp
+
       - name: Push Results
         run: |
           git config --global user.name "System-Pro-Bot"
           git config --global user.email "bot@systempro.com"
           git add output/
-          git commit -m "Decompiled ${{ github.event.inputs.apk_name }}"
+          git commit -m "Decompiled: ${{ github.event.inputs.apk_name }}"
           git push
