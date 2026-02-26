@@ -1,41 +1,34 @@
-name: System Pro Powerful Engine
+name: System Pro Engine V2
 on:
   workflow_dispatch:
     inputs:
       apk_name:
         description: 'APK File Name'
         required: true
-
 jobs:
-  compiler:
+  decompile:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. Checkout Code
-        uses: actions/checkout@v4
-
-      - name: 2. Setup Java
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v3
+      - name: Set up Java
+        uses: actions/setup-java@v3
         with:
           java-version: '17'
-          distribution: 'temurin'
-
-      - name: 3. Install JADX
+          distribution: 'zulu'
+      - name: Decompile
         run: |
-          sudo apt-get update
-          wget https://github.com/skylot/jadx/releases/download/v1.5.0/jadx-1.5.0.zip
-          unzip jadx-1.5.0.zip -d jadx_bin
-          echo "$(pwd)/jadx_bin/bin" >> $GITHUB_PATH
-
-      - name: 4. Decompile APK
+          sudo apt-get install -y apktool
+          wget https://github.com/skylot/jadx/releases/download/v1.4.7/jadx-1.4.7.zip
+          unzip jadx-1.4.7.zip -d jadx-tool
+          mkdir -p output/sources
+          apktool d "${{ github.event.inputs.apk_name }}" -o output/res_temp -f
+          ./jadx-tool/bin/jadx -d output/sources "${{ github.event.inputs.apk_name }}" --no-res
+          mv output/res_temp/AndroidManifest.xml output/ 2>/dev/null || true
+          mv output/res_temp/res output/resources 2>/dev/null || true
+      - name: Push Results
         run: |
-          mkdir -p output
-          # JADX کمانڈ جو سورس کوڈ نکالے گی
-          jadx -d output "${{ github.event.inputs.apk_name }}" || echo "Partial Success"
-
-      - name: 5. Save Results
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "System Pro Bot"
+          git config --global user.name "System-Pro-Bot"
+          git config --global user.email "bot@systempro.com"
           git add output/
-          git commit -m "Decompiled results for ${{ github.event.inputs.apk_name }}" || echo "No changes"
+          git commit -m "Decompiled ${{ github.event.inputs.apk_name }}"
           git push
