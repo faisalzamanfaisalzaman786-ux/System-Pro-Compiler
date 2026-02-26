@@ -1,6 +1,0 @@
-on:
-  workflow_dispatch:
-    inputs:
-      apk_path:
-        description: 'Path to APK in repo'
-        required: true
