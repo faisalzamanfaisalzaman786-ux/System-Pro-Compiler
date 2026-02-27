@@ -1,47 +1,45 @@
-name: Decompile APK
+name: Extract Java Sources from Decompiled APK
 
 on:
   workflow_dispatch:
     inputs:
-      apk_path:
-        description: 'ریپوزٹری میں APK کا راستہ'
+      artifact_url:
+        description: 'URL of the decompiled APK artifact (zip)'
         required: true
-        default: 'apk_uploads/input.apk'
 
 jobs:
-  decompile:
+  extract:
     runs-on: ubuntu-latest
     steps:
-      - name: ریپوزٹری کو چیک آؤٹ کریں
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: جاوا انسٹال کریں
+      - name: Download artifact
+        run: |
+          curl -L -o decompiled.zip "${{ github.event.inputs.artifact_url }}"
+          unzip decompiled.zip -d decompiled
+
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: apktool انسٹال کریں (درست GitHub Releases سے)
+      - name: Install jadx
         run: |
-          wget -O apktool https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool
-          wget -O apktool.jar https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar
-          chmod +x apktool apktool.jar
-          sudo mv apktool /usr/local/bin/
-          sudo mv apktool.jar /usr/local/bin/
-          apktool --version
+          wget https://github.com/skylot/jadx/releases/download/v1.5.0/jadx-1.5.0.zip
+          unzip jadx-1.5.0.zip -d jadx
+          echo "$(pwd)/jadx/bin" >> $GITHUB_PATH
 
-      - name: APK فائل کی موجودگی چیک کریں
+      - name: Run jadx
         run: |
-          ls -la "${{ github.workspace }}/${{ github.event.inputs.apk_path }}"
-          file "${{ github.workspace }}/${{ github.event.inputs.apk_path }}"
+          # اگر decompiled میں classes.dex ہے تو براہ راست چلائیں
+          jadx -d output decompiled/classes.dex || echo "classes.dex not found, trying whole folder"
+          # اگر نہ ملے تو پورے decompiled فولڈر کو بطور ان پٹ دیں
+          jadx -d output decompiled/
 
-      - name: APK ڈی کمپائل کریں
-        run: |
-          mkdir -p decompiled_output
-          apktool d "${{ github.workspace }}/${{ github.event.inputs.apk_path }}" -o decompiled_output/ -f
-
-      - name: ڈی کمپائل شدہ مواد اپ لوڈ کریں (منفرد نام کے ساتھ)
+      - name: Upload extracted sources
         uses: actions/upload-artifact@v4
         with:
-          name: decompiled-apk-${{ github.run_attempt }}
-          path: decompiled_output/
+          name: java-sources
+          path: output/
