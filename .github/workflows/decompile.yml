@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       apk_path:
-        description: 'Path to APK in repository'
+        description: 'ریپوزٹری میں APK کا راستہ'
         required: true
         default: 'apk_uploads/input.apk'
 
@@ -12,27 +12,27 @@ jobs:
   decompile:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - name: ریپوزٹری کو چیک آؤٹ کریں
+        uses: actions/checkout@v4
 
-      - name: Set up Java
-        uses: actions/setup-java@v3
+      - name: جاوا انسٹال کریں (apktool کے لیے)
+        uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '11'
+          java-version: '17'
 
-      - name: Install apktool
+      - name: apktool انسٹال کریں
         run: |
           wget https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool
           chmod +x apktool
           sudo mv apktool /usr/local/bin/
+          apktool --version
 
-      - name: Decompile APK
+      - name: APK فائل کی موجودگی چیک کریں
         run: |
-          apktool d "${{ github.workspace }}/${{ github.event.inputs.apk_path }}" -o decompiled/
+          ls -la "${{ github.workspace }}/${{ github.event.inputs.apk_path }}"
+          file "${{ github.workspace }}/${{ github.event.inputs.apk_path }}"
 
-      - name: Upload decompiled result
-        uses: actions/upload-artifact@v3
-        with:
-          name: decompiled-apk
-          path: decompiled/
+      - name: APK ڈی کمپائل کریں
+        run: |
+          mkdir -
