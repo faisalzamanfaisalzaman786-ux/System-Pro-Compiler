@@ -21,11 +21,11 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: apktool انسٹال کریں (GitHub Releases سے)
+      - name: apktool انسٹال کریں (درست GitHub Releases سے)
         run: |
-          # 1. apktool wrapper script ڈاؤن لوڈ کریں
+          # 1. wrapper script ڈاؤن لوڈ کریں
           wget -O apktool https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool
-          # 2. apktool.jar (ورژن 2.9.3) GitHub Releases سے ڈاؤن لوڈ کریں
+          # 2. apktool.jar (تازہ ترین ورژن 2.9.3) GitHub Releases سے ڈاؤن لوڈ کریں
           wget -O apktool.jar https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar
           # 3. دونوں کو executable بنائیں
           chmod +x apktool apktool.jar
@@ -35,6 +35,21 @@ jobs:
           # 5. تصدیق کریں
           apktool --version
 
+      - name: APK فائل کی موجودگی چیک کریں
+        run: |
+          ls -la "${{ github.workspace }}/${{ github.event.inputs.apk_path }}"
+          file "${{ github.workspace }}/${{ github.event.inputs.apk_path }}"
+
+      - name: APK ڈی کمپائل کریں
+        run: |
+          mkdir -p decompiled_output
+          apktool d "${{ github.workspace }}/${{ github.event.inputs.apk_path }}" -o decompiled_output/ -f
+
+      - name: ڈی کمپائل شدہ مواد اپ لوڈ کریں
+        uses: actions/upload-artifact@v4
+        with:
+          name: decompiled-apk
+          path: decompiled_output/
       - name: APK فائل کی موجودگی چیک کریں
         run: |
           ls -la "${{ github.workspace }}/${{ github.event.inputs.apk_path }}"
