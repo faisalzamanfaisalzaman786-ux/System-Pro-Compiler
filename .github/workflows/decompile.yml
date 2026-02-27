@@ -15,7 +15,7 @@ jobs:
       - name: ریپوزٹری کو چیک آؤٹ کریں
         uses: actions/checkout@v4
 
-      - name: جاوا انسٹال کریں (apktool کے لیے)
+      - name: جاوا انسٹال کریں
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
@@ -35,4 +35,11 @@ jobs:
 
       - name: APK ڈی کمپائل کریں
         run: |
-          mkdir -
+          mkdir -p decompiled_output
+          apktool d "${{ github.workspace }}/${{ github.event.inputs.apk_path }}" -o decompiled_output/ -f
+
+      - name: ڈی کمپائل شدہ مواد اپ لوڈ کریں
+        uses: actions/upload-artifact@v4   # <-- یہاں v3 کی جگہ v4 کر دیا
+        with:
+          name: decompiled-apk
+          path: decompiled_output/
