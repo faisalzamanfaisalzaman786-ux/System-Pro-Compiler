@@ -1,0 +1,38 @@
+name: Decompile APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      apk_path:
+        description: 'Path to APK in repository'
+        required: true
+        default: 'apk_uploads/input.apk'
+
+jobs:
+  decompile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+
+      - name: Install apktool
+        run: |
+          wget https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool
+          chmod +x apktool
+          sudo mv apktool /usr/local/bin/
+
+      - name: Decompile APK
+        run: |
+          apktool d "${{ github.workspace }}/${{ github.event.inputs.apk_path }}" -o decompiled/
+
+      - name: Upload decompiled result
+        uses: actions/upload-artifact@v3
+        with:
+          name: decompiled-apk
+          path: decompiled/
