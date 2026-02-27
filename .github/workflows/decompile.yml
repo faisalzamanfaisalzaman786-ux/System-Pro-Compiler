@@ -21,9 +21,9 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: apktool انسٹال کریں
+      - name: apktool انسٹال کریں (درست URL کے ساتھ)
         run: |
-          wget https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool
+          wget -O apktool https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool
           chmod +x apktool
           sudo mv apktool /usr/local/bin/
           apktool --version
@@ -39,7 +39,7 @@ jobs:
           apktool d "${{ github.workspace }}/${{ github.event.inputs.apk_path }}" -o decompiled_output/ -f
 
       - name: ڈی کمپائل شدہ مواد اپ لوڈ کریں
-        uses: actions/upload-artifact@v4   # <-- یہاں v3 کی جگہ v4 کر دیا
+        uses: actions/upload-artifact@v4
         with:
           name: decompiled-apk
           path: decompiled_output/
