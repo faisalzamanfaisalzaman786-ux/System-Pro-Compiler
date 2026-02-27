@@ -21,11 +21,18 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: apktool انسٹال کریں (درست URL کے ساتھ)
+      - name: apktool انسٹال کریں (jar + wrapper)
         run: |
+          # 1. apktool.jar ڈاؤن لوڈ کریں (تازہ ترین ورژن 2.9.3)
+          wget -O apktool.jar https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.9.3.jar
+          # 2. wrapper script ڈاؤن لوڈ کریں
           wget -O apktool https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool
-          chmod +x apktool
+          # 3. دونوں کو executable بنائیں
+          chmod +x apktool apktool.jar
+          # 4. system path میں رکھیں
           sudo mv apktool /usr/local/bin/
+          sudo mv apktool.jar /usr/local/bin/
+          # 5. تصدیق کریں
           apktool --version
 
       - name: APK فائل کی موجودگی چیک کریں
