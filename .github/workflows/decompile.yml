@@ -1,23 +1,19 @@
-name: Extract Java Sources from Decompiled APK
+name: Decompile APK and Extract All Sources
 
 on:
   workflow_dispatch:
     inputs:
-      artifact_url:
-        description: 'URL of the decompiled APK artifact (zip)'
+      apk_path:
+        description: 'Path to APK in repository'
         required: true
+        default: 'apk_uploads/input.apk'
 
 jobs:
-  extract:
+  decompile:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Download artifact
-        run: |
-          curl -L -o decompiled.zip "${{ github.event.inputs.artifact_url }}"
-          unzip decompiled.zip -d decompiled
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -25,21 +21,36 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      - name: Install apktool
+        run: |
+          wget https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool
+          chmod +x apktool
+          sudo mv apktool /usr/local/bin/
+
+      - name: Decompile APK with apktool
+        run: |
+          apktool d -f -o decompiled "${{ github.event.inputs.apk_path }}"
+
       - name: Install jadx
         run: |
           wget https://github.com/skylot/jadx/releases/download/v1.5.0/jadx-1.5.0.zip
           unzip jadx-1.5.0.zip -d jadx
           echo "$(pwd)/jadx/bin" >> $GITHUB_PATH
 
-      - name: Run jadx
+      - name: Extract Java/Kotlin sources with jadx
         run: |
-          # اگر decompiled میں classes.dex ہے تو براہ راست چلائیں
-          jadx -d output decompiled/classes.dex || echo "classes.dex not found, trying whole folder"
-          # اگر نہ ملے تو پورے decompiled فولڈر کو بطور ان پٹ دیں
-          jadx -d output decompiled/
+          # jadx خود بخود decompiled فولڈر سے classes.dex تلاش کر لے گا
+          jadx -d sources decompiled/
 
-      - name: Upload extracted sources
+      - name: Prepare final sources (including resources)
+        run: |
+          # jadx کے آؤٹ پٹ میں پہلے سے ہی تمام وسائل (resources) موجود ہیں
+          # اسے final_sources میں کاپی کریں
+          mkdir -p final_sources
+          cp -r sources/* final_sources/ || true
+
+      - name: Upload final sources artifact
         uses: actions/upload-artifact@v4
         with:
-          name: java-sources
-          path: output/
+          name: app-sources
+          path: final_sources/
