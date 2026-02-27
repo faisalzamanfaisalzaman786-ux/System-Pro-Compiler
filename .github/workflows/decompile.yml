@@ -23,9 +23,12 @@ jobs:
 
       - name: Install apktool
         run: |
-          wget https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool
+          # ڈاؤن لوڈ apktool wrapper اور jar
+          wget https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool -O apktool
+          wget https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.9.3.jar -O apktool.jar
           chmod +x apktool
           sudo mv apktool /usr/local/bin/
+          sudo mv apktool.jar /usr/local/bin/
 
       - name: Decompile APK with apktool
         run: |
@@ -39,15 +42,12 @@ jobs:
 
       - name: Extract Java/Kotlin sources with jadx
         run: |
-          # jadx خود بخود decompiled فولڈر سے classes.dex تلاش کر لے گا
           jadx -d sources decompiled/
 
-      - name: Prepare final sources (including resources)
+      - name: Prepare final sources
         run: |
-          # jadx کے آؤٹ پٹ میں پہلے سے ہی تمام وسائل (resources) موجود ہیں
-          # اسے final_sources میں کاپی کریں
           mkdir -p final_sources
-          cp -r sources/* final_sources/ || true
+          cp -r sources/* final_sources/ 2>/dev/null || true
 
       - name: Upload final sources artifact
         uses: actions/upload-artifact@v4
