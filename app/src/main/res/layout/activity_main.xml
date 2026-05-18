@@ -2,13 +2,12 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#070913">
+    android:background="#02040c">
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_centerInParent="true"
-        android:text="System Pro Dynamic Node"
-        android:textColor="#00f3ff"
-        android:textSize="22sp"
-        android:textStyle="bold" />
+        android:text="System Pro Dynamic"
+        android:textColor="#00ffcc"
+        android:textSize="20sp" />
 </RelativeLayout>

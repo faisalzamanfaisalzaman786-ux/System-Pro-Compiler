@@ -44,8 +44,8 @@ Execution failed for task ':app:checkDebugAarMetadata'.
   :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0
   :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.cardview:cardview:1.0.0
   :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.coordinatorlayout:coordinatorlayout:1.1.0
-  :app:debugRuntimeClasspath -> androidx.constraintlayout:constraintlayout:2.1.4
-  :app:debugRuntimeClasspath -> androidx.constraintlayout:constraintlayout:2.1.4 -> androidx.constraintlayout:constraintlayout-core:1.0.4
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.constraintlayout:constraintlayout:2.0.1
+  :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.constraintlayout:constraintlayout:2.0.1 -> androidx.constraintlayout:constraintlayout-solver:2.0.1
   :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.dynamicanimation:dynamicanimation:1.0.0
   :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.dynamicanimation:dynamicanimation:1.0.0 -> androidx.legacy:legacy-support-core-utils:1.0.0
   :app:debugRuntimeClasspath -> com.google.android.material:material:1.11.0 -> androidx.dynamicanimation:dynamicanimation:1.0.0 -> androidx.legacy:legacy-support-core-utils:1.0.0 -> androidx.documentfile:documentfile:1.0.0
@@ -61,4 +61,4 @@ Execution failed for task ':app:checkDebugAarMetadata'.
 > Run with --scan to get full insights.
 > Get more help at https://help.gradle.org.
 
-BUILD FAILED in 23s
+BUILD FAILED in 8s
