@@ -1,117 +1,114 @@
-name: System Pro Android Native Setup Engine
+name: System Pro Titan Master Engine
 
 on:
   push:
     branches:
       - main
   repository_dispatch:
-    types: [manual_trigger_build]
+    types: [trigger_b64_build]
 
 jobs:
-  initialize-and-compile:
+  orchestrate-ecosystem:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository Source
+      - name: Checkout Source Node
         uses: actions/checkout@v4
 
-      - name: Setup Java Development Kit Environment
+      - name: Configure Java Environment
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Bootstrap Core Android Structure
+      - name: Resolve Package and Paths
         run: |
-          mkdir -p build-logic
+          RAW_PKG="${{ github.event.client_payload.package_name }}"
+          PKG_NAME=${RAW_PKG:-"com.system.titan.pro"}
+          PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
+          
+          echo "TARGET_PACKAGE=$PKG_NAME" >> $GITHUB_ENV
+          echo "TARGET_PATH=$PKG_PATH" >> $GITHUB_ENV
+          
+          mkdir -p "app/src/main/java/$PKG_PATH"
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/mipmap-hdpi
-          mkdir -p app/src/main/res/mipmap-xhdpi
-          mkdir -p app/src/main/res/mipmap-xxhdpi
-          mkdir -p app/src/main/res/mipmap-xxxhdpi
-          mkdir -p app/src/main/java/com/system/pro
 
-          if [ ! -f "settings.gradle" ]; then
-            echo "rootProject.name = 'SystemProApp'" > settings.gradle
-            echo "include ':app'" >> settings.gradle
-          fi
-
-          if [ ! -f "build.gradle" ]; then
-            cat << 'EOF' > build.gradle
-          buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.5.2'
-              }
-          }
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          task clean(type: Delete) {
-              delete rootProject.buildDir
-          }
+      - name: Inject Missing Resource Blueprints
+        run: |
+          if [ ! -f "app/src/main/res/values/colors.xml" ]; then
+            cat << 'EOF' > app/src/main/res/values/colors.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="colorPrimary">#02040c</color>
+              <color name="colorAccent">#00ffcc</color>
+              <color name="neonCyan">#00f3ff</color>
+              <color name="neonYellow">#fecf02</color>
+              <color name="bgDark">#070913</color>
+          </resources>
           EOF
           fi
 
-          if [ ! -f "app/build.gradle" ]; then
-            cat << 'EOF' > app/build.gradle
-          plugins {
-              id 'com.android.application'
-          }
-          android {
-              namespace 'com.system.pro'
-              compileSdk 34
-              defaultConfig {
-                  applicationId "com.system.pro"
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0.0"
-                  testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-              }
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-                  }
-              }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-          }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
-              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-          }
+          if [ ! -f "app/src/main/res/values/styles.xml" ]; then
+            cat << 'EOF' > app/src/main/res/values/styles.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="Theme.AppCompat.NoActionBar" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+                  <item name="windowNoTitle">true</item>
+                  <item name="windowActionBar">false</item>
+                  <item name="colorPrimary">@color/colorPrimary</item>
+                  <item name="colorAccent">@color/colorAccent</item>
+              </style>
+          </resources>
           EOF
           fi
 
-          if [ ! -f "app/src/main/AndroidManifest.xml" ]; then
-            cat << 'EOF' > app/src/main/AndroidManifest.xml
+          if [ ! -f "app/src/main/res/drawable/edittext_background.xml" ]; then
+            cat << 'EOF' > app/src/main/res/drawable/edittext_background.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <shape xmlns:android="http://schemas.android.com/apk/res/android">
+              <solid android:color="#1AFFFFFF"/>
+              <stroke android:width="1dp" android:color="#3300f3ff" />
+              <corners android:radius="12dp"/>
+          </shape>
+          EOF
+          fi
+
+          if [ ! -f "app/src/main/res/layout/activity_main.xml" ]; then
+            cat << 'EOF' > app/src/main/res/layout/activity_main.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:background="#070913">
+              <TextView
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:layout_centerInParent="true"
+                  android:text="System Pro Dynamic Node"
+                  android:textColor="#00f3ff"
+                  android:textSize="22sp"
+                  android:textStyle="bold" />
+          </RelativeLayout>
+          EOF
+          fi
+
+      - name: Verify and Standardize Manifest Context
+        run: |
+          MANIFEST_PATH="app/src/main/AndroidManifest.xml"
+          if [ ! -f "$MANIFEST_PATH" ]; then
+            cat << 'EOF' > "$MANIFEST_PATH"
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-              <application
-                  android:name=".MyApplication"
-                  android:allowBackup="true"
-                  android:icon="@mipmap/ic_launcher"
-                  android:label="System Pro App"
-                  android:roundIcon="@mipmap/ic_launcher_round"
-                  android:supportsRtl="true"
+              <application 
+                  android:allowBackup="true" 
+                  android:label="System Pro" 
+                  android:icon="@mipmap/ic_launcher" 
+                  android:roundIcon="@mipmap/ic_launcher_round" 
                   android:theme="@style/Theme.AppCompat.NoActionBar">
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true">
+                  <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
@@ -122,84 +119,146 @@ jobs:
           EOF
           fi
 
-          if [ ! -f "app/src/main/java/com/system/pro/MyApplication.java" ]; then
-            cat << 'EOF' > app/src/main/java/com/system/pro/MyApplication.java
-          package com.system.pro;
-          import android.app.Application;
-          public class MyApplication extends Application {
-              @Override
-              public void onCreate() {
-                  super.onCreate();
-              }
-          }
-          EOF
-          fi
+          PERMISSIONS=(
+            "android.permission.INTERNET"
+            "android.permission.ACCESS_WIFI_STATE"
+            "android.permission.CHANGE_WIFI_STATE"
+            "android.permission.ACCESS_NETWORK_STATE"
+            "android.permission.BLUETOOTH"
+            "android.permission.BLUETOOTH_ADMIN"
+            "android.permission.BLUETOOTH_CONNECT"
+            "android.permission.BLUETOOTH_SCAN"
+            "android.permission.BLUETOOTH_ADVERTISE"
+            "android.permission.CAMERA"
+            "android.permission.READ_EXTERNAL_STORAGE"
+            "android.permission.WRITE_EXTERNAL_STORAGE"
+            "android.permission.MANAGE_EXTERNAL_STORAGE"
+            "android.permission.FOREGROUND_SERVICE"
+            "android.permission.SYSTEM_ALERT_WINDOW"
+          )
+          for PERM in "${PERMISSIONS[@]}"; do
+            if ! grep -q "$PERM" "$MANIFEST_PATH"; then
+              sed -i "/<manifest/a \    <uses-permission android:name=\"$PERM\" />" "$MANIFEST_PATH"
+            fi
+          done
 
-          if [ ! -f "app/src/main/java/com/system/pro/MainActivity.java" ]; then
-            cat << 'EOF' > app/src/main/java/com/system/pro/MainActivity.java
-          package com.system.pro;
+      - name: Pre-Build Code Scanner and Package Fixer
+        run: |
+          find app/src/main/java/${{ env.TARGET_PATH }} -type f -name "*.java" -exec sed -i "s|^package .*|package ${{ env.TARGET_PACKAGE }};|g" {} \;
+          
+          if [ ! -f "app/src/main/java/${{ env.TARGET_PATH }}/MainActivity.java" ]; then
+            cat << 'EOF' > "app/src/main/java/${{ env.TARGET_PATH }}/MainActivity.java"
+          package ${{ env.TARGET_PACKAGE }};
+
+          import android.Manifest;
+          import android.content.Intent;
+          import android.content.pm.PackageManager;
+          import android.net.Uri;
+          import android.os.Build;
           import android.os.Bundle;
+          import android.os.Environment;
+          import android.provider.Settings;
+          import androidx.annotation.NonNull;
           import androidx.appcompat.app.AppCompatActivity;
+          import androidx.core.app.ActivityCompat;
+          import androidx.core.content.ContextCompat;
+          import java.util.ArrayList;
+          import java.util.List;
+
           public class MainActivity extends AppCompatActivity {
+              private static final int PERMISSION_REQ_CODE = 2026;
+              private static final int MANAGE_STORAGE_REQ_CODE = 2027;
+
               @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  setContentView(R.id.activity_main);
+              protected void onCreate(Bundle saved) {
+                  super.onCreate(saved);
+                  setContentView(getLayoutResourceId());
+                  checkAndRequestRuntimePermissions();
+              }
+
+              private int getLayoutResourceId() {
+                  return getResources().getIdentifier("activity_main", "layout", getPackageName());
+              }
+
+              private void checkAndRequestRuntimePermissions() {
+                  List<String> permissionsNeeded = new ArrayList<>();
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                      addPermissionIfMissing(permissionsNeeded, Manifest.permission.BLUETOOTH_CONNECT);
+                      addPermissionIfMissing(permissionsNeeded, Manifest.permission.BLUETOOTH_SCAN);
+                      addPermissionIfMissing(permissionsNeeded, Manifest.permission.BLUETOOTH_ADVERTISE);
+                  }
+                  addPermissionIfMissing(permissionsNeeded, Manifest.permission.CAMERA);
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                      addPermissionIfMissing(permissionsNeeded, "android.permission.POST_NOTIFICATIONS");
+                  }
+                  if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                      addPermissionIfMissing(permissionsNeeded, Manifest.permission.READ_EXTERNAL_STORAGE);
+                      addPermissionIfMissing(permissionsNeeded, Manifest.permission.WRITE_EXTERNAL_STORAGE);
+                  }
+                  if (!permissionsNeeded.isEmpty()) {
+                      ActivityCompat.requestPermissions(this, permissionsNeeded.toArray(new String[0]), PERMISSION_REQ_CODE);
+                  } else {
+                      checkSpecialPermissions();
+                  }
+              }
+
+              private void addPermissionIfMissing(List<String> list, String permission) {
+                  if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
+                      list.add(permission);
+                  }
+              }
+
+              @Override
+              public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+                  super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+                  if (requestCode == PERMISSION_REQ_CODE) {
+                      checkSpecialPermissions();
+                  }
+              }
+
+              private void checkSpecialPermissions() {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                      if (!Environment.isExternalStorageManager()) {
+                          try {
+                              Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+                              intent.addCategory("android.intent.category.DEFAULT");
+                              intent.setData(Uri.parse(String.format("package:%s", getPackageName())));
+                              startActivityForResult(intent, MANAGE_STORAGE_REQ_CODE);
+                          } catch (Exception e) {
+                              Intent intent = new Intent();
+                              intent.setAction(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+                              startActivityForResult(intent, MANAGE_STORAGE_REQ_CODE);
+                          }
+                      }
+                  }
               }
           }
           EOF
           fi
 
-          if [ ! -f "app/src/main/res/layout/activity_main.xml" ]; then
-            cat << 'EOF' > app/src/main/res/layout/activity_main.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <androidx.constraintlayout.widget.ConstraintLayout 
-              xmlns:android="http://schemas.android.com/apk/res/android"
-              xmlns:app="http://schemas.android.com/apk/res-auto"
-              android:id="@+id/activity_main"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:background="#070913">
-              <TextView
-                  android:layout_width="wrap_content"
-                  android:layout_height="wrap_content"
-                  android:text="System Pro Native Engine"
-                  android:textColor="#ffffff"
-                  android:textSize="20sp"
-                  app:layout_constraintBottom_toBottomOf="parent"
-                  app:layout_constraintEnd_toEndOf="parent"
-                  app:layout_constraintStart_toStartOf="parent"
-                  app:layout_constraintTop_toTopOf="parent" />
-          </androidx.constraintlayout.widget.ConstraintLayout>
-          EOF
-          fi
-
-          if [ ! -f "app/src/main/res/values/strings.xml" ]; then
-            cat << 'EOF' > app/src/main/res/values/strings.xml
-          <resources>
-              <string name="app_name">System Pro App</string>
-          </resources>
-          EOF
-          fi
-
-      - name: Auto Commit Structural Layout Templates
+      - name: Sync and Commit Ecosystem State
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action Engine"
           git add -A
           if ! git diff-index --quiet HEAD; then
-            git commit -m "System Pro Initialization: Complete boilerplate layout structured"
+            git commit -m "Ecosystem Sync: Missing assets injected and standardized"
             git push origin main
           fi
 
-      - name: Setup Gradle Build Environment
-        uses: gradle/actions/setup-gradle@v3
+      - name: Lock and Initialize Gradle 8.5
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.5'
 
-      - name: Execute Native Project Compilation
+      - name: Execute Production Compilation
         run: |
-          if [ -f "gradlew" ]; then
-            chmod +x gradlew
-            ./gradlew assembleDebug
-          else
-            gradle assembleDebug
-          fi
+          mkdir -p output_report
+          gradle assembleDebug --no-daemon 2> output_report/gradle_err.log
+          cp app/build/outputs/apk/debug/app-debug.apk output_report/system-pro-final.apk
+
+      - name: Ship Compiled Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: System-Pro-Titan-Build
+          path: output_report/
