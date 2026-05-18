@@ -52,6 +52,7 @@ jobs:
           echo "${{ github.event.client_payload.payload }}" | base64 -d > app_payload.zip || true
           if [ -s app_payload.zip ]; then
             unzip -o app_payload.zip -d extracted_payload/ || true
+            find extracted_payload -type f -name "*.gradle" -delete
           fi
 
       - name: Force Custom Resources Integration
@@ -193,7 +194,7 @@ jobs:
           EOF
 
           cat << 'EOF' > build.gradle
-          plugins { id 'com.android.application' version '8.1.2' apply false }
+          plugins { id 'com.android.application' version '8.2.2' apply false }
           EOF
 
           echo -e '<?xml version="1.0" encoding="utf-8"?>\n<shape xmlns:android="http://schemas.android.com/apk/res/android">\n    <solid android:color="#1AFFFFFF"/>\n    <corners android:radius="8dp"/>\n</shape>' > app/src/main/res/drawable/edittext_background.xml
@@ -217,6 +218,7 @@ jobs:
           android {
               namespace "${{ env.TARGET_PACKAGE }}"
               compileSdk 34
+              buildToolsVersion "34.0.0"
               defaultConfig {
                   applicationId "${{ env.TARGET_PACKAGE }}"
                   minSdk 24
@@ -225,9 +227,15 @@ jobs:
                   versionName "1.0"
               }
           }
+          configurations.all {
+              resolutionStrategy {
+                  force 'androidx.appcompat:appcompat:1.6.1'
+                  force 'com.google.android.material:material:1.11.0'
+              }
+          }
           dependencies {
               implementation "androidx.appcompat:appcompat:1.6.1"
-              implementation "com.google.android.material:material:1.10.0"
+              implementation "com.google.android.material:material:1.11.0"
           }
           EOF
 
