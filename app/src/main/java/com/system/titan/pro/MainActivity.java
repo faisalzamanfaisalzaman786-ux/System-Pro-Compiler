@@ -1,4 +1,4 @@
-package $PKG_NAME;
+package com.system.titan.pro;
 
 import android.os.Bundle;
 import androidx.appcompat.app.AppCompatActivity;
