@@ -15,12 +15,6 @@ jobs:
       - name: Checkout Source Node
         uses: actions/checkout@v4
 
-      - name: Configure Java Environment
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '17'
-
       - name: Resolve Package and Paths
         run: |
           RAW_PKG="${{ github.event.client_payload.package_name }}"
@@ -245,20 +239,3 @@ jobs:
             git commit -m "Ecosystem Sync: Missing assets injected and standardized"
             git push origin main
           fi
-
-      - name: Lock and Initialize Gradle 8.5
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.5'
-
-      - name: Execute Production Compilation
-        run: |
-          mkdir -p output_report
-          gradle assembleDebug --no-daemon 2> output_report/gradle_err.log
-          cp app/build/outputs/apk/debug/app-debug.apk output_report/system-pro-final.apk
-
-      - name: Ship Compiled Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: System-Pro-Titan-Build
-          path: output_report/
