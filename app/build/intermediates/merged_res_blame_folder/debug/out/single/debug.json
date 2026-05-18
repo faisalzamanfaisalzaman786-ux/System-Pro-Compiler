@@ -1,0 +1,18 @@
+[
+    {
+        "merged": "com.system.titan.pro.app-merged_res-31:/layout_activity_main.xml.flat",
+        "source": "com.system.titan.pro.app-main-33:/layout/activity_main.xml"
+    },
+    {
+        "merged": "com.system.titan.pro.app-merged_res-31:/drawable_edittext_background.xml.flat",
+        "source": "com.system.titan.pro.app-main-33:/drawable/edittext_background.xml"
+    },
+    {
+        "merged": "com.system.titan.pro.app-merged_res-31:/mipmap-hdpi_ic_launcher_round.png.flat",
+        "source": "com.system.titan.pro.app-main-33:/mipmap-hdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.system.titan.pro.app-merged_res-31:/mipmap-hdpi_ic_launcher.png.flat",
+        "source": "com.system.titan.pro.app-main-33:/mipmap-hdpi/ic_launcher.png"
+    }
+]
