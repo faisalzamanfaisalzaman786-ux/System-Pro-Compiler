@@ -4,7 +4,6 @@ plugins {
 android {
     namespace "com.system.titan.pro"
     compileSdk 34
-    buildToolsVersion "34.0.0"
     defaultConfig {
         applicationId "com.system.titan.pro"
         minSdk 24
@@ -15,5 +14,5 @@ android {
 }
 dependencies {
     implementation "androidx.appcompat:appcompat:1.6.1"
-    implementation "com.google.android.material:material:1.11.0"
+    implementation "com.google.android.material:material:1.10.0"
 }
