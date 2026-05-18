@@ -1,6 +1,9 @@
 name: System Pro Titan Master Build
 
 on:
+  push:
+    branches:
+      - main
   repository_dispatch:
     types: [trigger_b64_build]
 
