@@ -92,9 +92,11 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.5'
+          cache-disabled: true
 
-      - name: Build Asset APK
+      - name: Force Clean and Build Asset APK
         run: |
+          gradle clean --no-daemon
           gradle assembleDebug --no-daemon 2> output_report/gradle_err.log
           cp app/build/outputs/apk/debug/app-debug.apk output_report/app-debug.apk
 
