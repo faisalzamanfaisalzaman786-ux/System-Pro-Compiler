@@ -37,18 +37,75 @@ jobs:
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/drawable
 
+      - name: Inject Master Gradle Framework
+        run: |
+          cat << 'EOF' > settings.gradle
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "System Pro"
+          include ':app'
+          EOF
+
+          cat << 'EOF' > build.gradle
+          plugins {
+              id 'com.android.application' version '8.2.2' apply false
+          }
+          EOF
+
+          cat << 'EOF' > app/build.gradle
+          plugins {
+              id 'com.android.application'
+          }
+          android {
+              namespace "${{ env.TARGET_PACKAGE }}"
+              compileSdk 34
+              defaultConfig {
+                  applicationId "${{ env.TARGET_PACKAGE }}"
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+                  testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+              }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+          }
+          EOF
+
       - name: Verify and Standardize Manifest Context
         run: |
           MANIFEST_PATH="app/src/main/AndroidManifest.xml"
-          if [ ! -f "$MANIFEST_PATH" ]; then
-            cat << 'EOF' > "$MANIFEST_PATH"
+          cat << 'EOF' > "$MANIFEST_PATH"
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application 
                   android:allowBackup="true" 
                   android:label="System Pro" 
-                  android:icon="@mipmap/ic_launcher" 
-                  android:roundIcon="@mipmap/ic_launcher_round" 
                   android:theme="@style/Theme.AppCompat.NoActionBar">
                   <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
@@ -59,7 +116,6 @@ jobs:
               </application>
           </manifest>
           EOF
-          fi
 
           PERMISSIONS=(
             "android.permission.INTERNET"
@@ -79,9 +135,7 @@ jobs:
             "android.permission.SYSTEM_ALERT_WINDOW"
           )
           for PERM in "${PERMISSIONS[@]}"; do
-            if ! grep -q "$PERM" "$MANIFEST_PATH"; then
-              sed -i "/<manifest/a \    <uses-permission android:name=\"$PERM\" />" "$MANIFEST_PATH"
-            fi
+            sed -i "/<manifest/a \    <uses-permission android:name=\"$PERM\" />" "$MANIFEST_PATH"
           done
 
       - name: Pre-Build Code Scanner and Package Fixer
