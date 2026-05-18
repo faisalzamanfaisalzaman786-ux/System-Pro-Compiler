@@ -180,6 +180,8 @@ jobs:
 
       - name: Core Environment Setup
         run: |
+          rm -f settings.gradle build.gradle app/build.gradle
+          
           cat << 'EOF' > settings.gradle
           pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement {
@@ -191,7 +193,7 @@ jobs:
           EOF
 
           cat << 'EOF' > build.gradle
-          plugins { id 'com.android.application' version '8.2.2' apply false }
+          plugins { id 'com.android.application' version '8.1.2' apply false }
           EOF
 
           echo -e '<?xml version="1.0" encoding="utf-8"?>\n<shape xmlns:android="http://schemas.android.com/apk/res/android">\n    <solid android:color="#1AFFFFFF"/>\n    <corners android:radius="8dp"/>\n</shape>' > app/src/main/res/drawable/edittext_background.xml
@@ -215,7 +217,6 @@ jobs:
           android {
               namespace "${{ env.TARGET_PACKAGE }}"
               compileSdk 34
-              buildToolsVersion "34.0.0"
               defaultConfig {
                   applicationId "${{ env.TARGET_PACKAGE }}"
                   minSdk 24
@@ -226,7 +227,7 @@ jobs:
           }
           dependencies {
               implementation "androidx.appcompat:appcompat:1.6.1"
-              implementation "com.google.android.material:material:1.11.0"
+              implementation "com.google.android.material:material:1.10.0"
           }
           EOF
 
