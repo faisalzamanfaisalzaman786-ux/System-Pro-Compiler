@@ -1,0 +1,18 @@
+
+FAILURE: Build failed with an exception.
+
+* Where:
+Build file '/home/runner/work/system-pro-direct/system-pro-direct/app/build.gradle' line: 2
+
+* What went wrong:
+An exception occurred applying plugin request [id: 'com.android.application']
+> Failed to apply plugin 'com.android.internal.version-check'.
+   > Minimum supported Gradle version is 8.7. Current version is 8.5. If using the gradle wrapper, try editing the distributionUrl in /home/runner/work/system-pro-direct/system-pro-direct/gradle/wrapper/gradle-wrapper.properties to gradle-8.7-all.zip
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 4s
