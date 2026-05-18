@@ -1,78 +1,207 @@
-name: System Pro Cloud Bridge
+name: System Pro Android Native Setup Engine
 
 on:
+  push:
+    branches:
+      - main
   repository_dispatch:
-    types: [build-app]
+    types: [manual_trigger_build]
 
 jobs:
-  build:
+  initialize-and-compile:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 1. Workspace Cleanup
+      - name: Checkout Repository Source
         uses: actions/checkout@v4
 
-      - name: 2. Java Development Kit Setup (v17)
+      - name: Setup Java Development Kit Environment
         uses: actions/setup-java@v4
         with:
+          distribution: 'zulu'
           java-version: '17'
-          distribution: 'temurin'
-          cache: 'gradle'
 
-      - name: 3. Injecting Code from System Pro App
+      - name: Bootstrap Core Android Structure
         run: |
-          # پیکیج کا راستہ خودکار طور پر بنانا
-          PKG_NAME="${{ github.event.client_payload.package_name }}"
-          PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
+          PACKAGE_PATH="src/main/java/com/system/pro"
           
-          mkdir -p app/src/main/java/$PKG_PATH
+          mkdir -p build-logic
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-xhdpi
+          mkdir -p app/src/main/res/mipmap-xxhdpi
+          mkdir -p app/src/main/res/mipmap-xxxhdpi
+          mkdir -p app/src/main/$PACKAGE_PATH
 
-          # ایپ سے بھیجا گیا کوڈ کلاؤڈ فائلوں میں منتقل کرنا
-          echo '${{ github.event.client_payload.java }}' > app/src/main/java/$PKG_PATH/MainActivity.java
-          echo '${{ github.event.client_payload.xml }}' > app/src/main/res/layout/activity_main.xml
-          echo '${{ github.event.client_payload.manifest }}' > app/src/main/AndroidManifest.xml
-          
-          # ضروری ریسورسز (Colors and Styles)
-          echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="colorPrimary">#00FFCC</color><style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar" /></resources>' > app/src/main/res/values/colors.xml
-          echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">${{ github.event.client_payload.app_name }}</string></resources>' > app/src/main/res/values/strings.xml
+          if [ ! -f "settings.gradle" ]; then
+            echo "rootProject.name = 'SystemProApp'" > settings.gradle
+            echo "include ':app'" >> settings.gradle
+          fi
 
-      - name: 4. Auto-Configure Build Engine
-        run: |
-          # گریڈل فائلز کی تیاری
-          cat <<EOF > build.gradle
+          if [ ! -f "build.gradle" ]; then
+            cat << 'EOF' > build.gradle
           buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.5.2'
+              }
           }
-          allprojects { repositories { google(); mavenCentral() } }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          task clean(type: Delete) {
+              delete rootProject.buildDir
+          }
           EOF
-          
-          cat <<EOF > app/build.gradle
-          plugins { id 'com.android.application' }
+          fi
+
+          if [ ! -f "app/build.gradle" ]; then
+            cat << 'EOF' > app/build.gradle
+          plugins {
+              id 'com.android.application'
+          }
           android {
-              namespace "${{ github.event.client_payload.package_name }}"
+              namespace 'com.system.pro'
               compileSdk 34
               defaultConfig {
-                  applicationId "${{ github.event.client_payload.package_name }}"
+                  applicationId "com.system.pro"
                   minSdk 24
                   targetSdk 34
                   versionCode 1
-                  versionName "1.0"
+                  versionName "1.0.0"
+                  testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+              }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
               }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.9.0'
+              implementation 'com.google.android.material:material:1.11.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
           }
           EOF
+          fi
 
-      - name: 5. Compiling & Generating APK
-        run: chmod +x gradlew && ./gradlew assembleDebug
+          if [ ! -f "app/src/main/AndroidManifest.xml" ]; then
+            cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <application
+                  android:name=".MyApplication"
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="System Pro App"
+                  android:roundIcon="@mipmap/ic_launcher_round"
+                  android:supportsRtl="true"
+                  android:theme="@style/Theme.AppCompat.NoActionBar">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported:="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+          fi
 
-      - name: 6. Delivery of APK to Local Bridge
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ github.event.client_payload.app_name }}_Production
-          path: app/build/outputs/apk/debug/*.apk
+          if [ ! -f "app/$PACKAGE_PATH/MyApplication.java" ]; then
+            cat << 'EOF' > app/$PACKAGE_PATH/MyApplication.java
+          package com.system.pro;
+          import android.app.Application;
+          public class MyApplication extends Application {
+              @Override
+              public void onCreate() {
+                  super.onCreate();
+              }
+          }
+          EOF
+          fi
+
+          if [ ! -f "app/$PACKAGE_PATH/MainActivity.java" ]; then
+            cat << 'EOF' > app/$PACKAGE_PATH/MainActivity.java
+          package com.system.pro;
+          import android.os.Bundle;
+          import androidx.appcompat.app.AppCompatActivity;
+          public class MainActivity extends AppCompatActivity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setContentView(R.id.activity_main);
+              }
+          }
+          EOF
+          fi
+
+          if [ ! -f "app/src/main/res/layout/activity_main.xml" ]; then
+            cat << 'EOF' > app/src/main/res/layout/activity_main.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <androidx.constraintlayout.widget.ConstraintLayout 
+              xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:app="http://schemas.android.com/apk/res-auto"
+              android:id="@+id/activity_main"
+              android:layout_width="match_map"
+              android:layout_height="match_map"
+              android:background="#070913">
+              <TextView
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="System Pro Native Engine"
+                  android:textColor="#ffffff"
+                  android:textSize="20sp"
+                  app:layout_constraintBottom_toBottomOf="parent"
+                  app:layout_constraintEnd_toEndOf="parent"
+                  app:layout_constraintStart_toStartOf="parent"
+                  app:layout_constraintTop_toTopOf="parent" />
+          </androidx.constraintlayout.widget.ConstraintLayout>
+          EOF
+          fi
+
+          if [ ! -f "app/src/main/res/values/strings.xml" ]; then
+            cat << 'EOF' > app/src/main/res/values/strings.xml
+          <resources>
+              <string name="app_name">System Pro App</string>
+          </resources>
+          EOF
+          fi
+
+      - name: Auto Commit Structural Layout Templates
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action Engine"
+          git add -A
+          if ! git diff-index --quiet HEAD; then
+            git commit -m "System Pro Initialization: Complete boilerplate layout structured"
+            git push origin main
+          fi
+
+      - name: Setup Gradle Build Environment
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Execute Native Project Compilation
+        run: |
+          if [ -f "gradlew" ]; then
+            chmod +x gradlew
+            ./gradlew assembleDebug
+          else
+            gradle assembleDebug
+          fi
