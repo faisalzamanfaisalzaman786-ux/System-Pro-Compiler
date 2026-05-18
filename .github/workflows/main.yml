@@ -23,8 +23,6 @@ jobs:
 
       - name: Bootstrap Core Android Structure
         run: |
-          PACKAGE_PATH="src/main/java/com/system/pro"
-          
           mkdir -p build-logic
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
@@ -32,7 +30,7 @@ jobs:
           mkdir -p app/src/main/res/mipmap-xhdpi
           mkdir -p app/src/main/res/mipmap-xxhdpi
           mkdir -p app/src/main/res/mipmap-xxxhdpi
-          mkdir -p app/src/main/$PACKAGE_PATH
+          mkdir -p app/src/main/java/com/system/pro
 
           if [ ! -f "settings.gradle" ]; then
             echo "rootProject.name = 'SystemProApp'" > settings.gradle
@@ -113,7 +111,7 @@ jobs:
                   android:theme="@style/Theme.AppCompat.NoActionBar">
                   <activity
                       android:name=".MainActivity"
-                      android:exported:="true">
+                      android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
@@ -124,8 +122,8 @@ jobs:
           EOF
           fi
 
-          if [ ! -f "app/$PACKAGE_PATH/MyApplication.java" ]; then
-            cat << 'EOF' > app/$PACKAGE_PATH/MyApplication.java
+          if [ ! -f "app/src/main/java/com/system/pro/MyApplication.java" ]; then
+            cat << 'EOF' > app/src/main/java/com/system/pro/MyApplication.java
           package com.system.pro;
           import android.app.Application;
           public class MyApplication extends Application {
@@ -137,8 +135,8 @@ jobs:
           EOF
           fi
 
-          if [ ! -f "app/$PACKAGE_PATH/MainActivity.java" ]; then
-            cat << 'EOF' > app/$PACKAGE_PATH/MainActivity.java
+          if [ ! -f "app/src/main/java/com/system/pro/MainActivity.java" ]; then
+            cat << 'EOF' > app/src/main/java/com/system/pro/MainActivity.java
           package com.system.pro;
           import android.os.Bundle;
           import androidx.appcompat.app.AppCompatActivity;
@@ -159,8 +157,8 @@ jobs:
               xmlns:android="http://schemas.android.com/apk/res/android"
               xmlns:app="http://schemas.android.com/apk/res-auto"
               android:id="@+id/activity_main"
-              android:layout_width="match_map"
-              android:layout_height="match_map"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
               android:background="#070913">
               <TextView
                   android:layout_width="wrap_content"
