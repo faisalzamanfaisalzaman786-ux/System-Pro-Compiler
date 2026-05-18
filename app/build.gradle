@@ -2,14 +2,14 @@ plugins {
     id 'com.android.application'
 }
 android {
-    namespace 'com.system.pro'
+    namespace "com.system.titan.pro"
     compileSdk 34
     defaultConfig {
-        applicationId "com.system.pro"
+        applicationId "com.system.titan.pro"
         minSdk 24
         targetSdk 34
         versionCode 1
-        versionName "1.0.0"
+        versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
     buildTypes {
