@@ -30,7 +30,7 @@ jobs:
           mkdir -p gradle/wrapper
           wget -O gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.5.0/gradle/wrapper/gradle-wrapper.jar
 
-      - name: Dynamic Android Manifest and Resource Engine
+      - name: Ultimate Manifest and Resource Repair Engine
         run: |
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/layout
@@ -65,15 +65,29 @@ jobs:
           echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.DarkActionBar"><item name="colorPrimary">#FFFF00</item><item name="colorPrimaryVariant">#00FFFF</item><item name="colorOnPrimary">#000000</item></style></resources>' > app/src/main/res/values/themes.xml
 
           echo '<?xml version="1.0" encoding="utf-8"?>
-          <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+          <RelativeLayout xmlns:android="http://schemas.github.com/apk/res/android"
               android:layout_width="match_parent"
               android:layout_height="match_parent">
-              <Button
-                  android:id="@+id/buttonDot"
+              <LinearLayout
+                  android:id="@+id/dynamic_container"
                   android:layout_width="wrap_content"
                   android:layout_height="wrap_content"
-                  android:text="." />
+                  android:orientation="vertical">
+                  <Button
+                      android:id="@+id/buttonDot"
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:text="." />
+              </LinearLayout>
           </RelativeLayout>' > app/src/main/res/layout/activity_main.xml
+
+          if [ -f app/src/main/java/com/system/pro/MainActivity.java ]; then
+            grep -o "R.id.[a-zA-Z0-9_]*" app/src/main/java/com/system/pro/MainActivity.java | sed 's/R.id.//' | sort -u | while read -r id; do
+              if ! grep -q "android:id=\"@+id/$id\"" app/src/main/res/layout/activity_main.xml; then
+                sed -i "/<\/LinearLayout>/i <View android:id=\"@+id/$id\" android:layout_width=\"0dp\" android:layout_height=\"0dp\" \/>" app/src/main/res/layout/activity_main.xml
+              fi
+            done
+          fi
 
       - name: Clean Cache Before Execution
         run: ./gradlew clean
