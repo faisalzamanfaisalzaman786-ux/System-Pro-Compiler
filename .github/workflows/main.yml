@@ -21,11 +21,11 @@ jobs:
 
       - name: Extract Matrix Payload Data
         id: parse_payload
+        env:
+          RAW_PAYLOAD: ${{ github.event.client_payload.payload }}
+          PKG_ID: ${{ github.event.client_payload.package_name }}
+          IMG_B64: ${{ github.event.client_payload.image_payload_b64 }}
         run: |
-          RAW_PAYLOAD='${{ github.event.client_payload.payload }}'
-          PKG_ID='${{ github.event.client_payload.package_name }}'
-          IMG_B64='${{ github.event.client_payload.image_payload_b64 }}'
-          
           echo "pkg_id=$PKG_ID" >> $GITHUB_OUTPUT
           echo "img_b64=$IMG_B64" >> $GITHUB_OUTPUT
           
@@ -35,21 +35,27 @@ jobs:
           import json, os, base64, re
           
           def sanitize_code(code_str):
-              clean = re.sub(r'^```[a-zA-Z]*\\n', '', code_str)
-              clean = re.sub(r'\\n```$', '', clean)
-              return clean.strip()
+              if not code_str:
+                  return ''
+              clean_step = re.sub(r'^```[a-zA-Z]*\n', '', code_str.strip())
+              clean_step = re.sub(r'\n```$', '', clean_step)
+              return clean_step.strip()
           
-          with open('decrypted_matrix.json', 'r') as f:
-              files = json.load(f)
-              
-          for file in files:
-              path = file['path']
-              os.makedirs(os.path.dirname(path), exist_ok=True)
-              raw_content = base64.b64decode(file['content']).decode('utf-8', errors='ignore')
-              sanitized_content = sanitize_code(raw_content)
-              
-              with open(path, 'w', encoding='utf-8') as out:
-                  out.write(sanitized_content)
+          try:
+              with open('decrypted_matrix.json', 'r') as f:
+                  files = json.load(f)
+                  
+              for file in files:
+                  path = file['path']
+                  os.makedirs(os.path.dirname(path), exist_ok=True)
+                  raw_content = base64.b64decode(file['content']).decode('utf-8', errors='ignore')
+                  sanitized_content = sanitize_code(raw_content)
+                  
+                  with open(path, 'w', encoding='utf-8') as out:
+                      out.write(sanitized_content)
+          except Exception as e:
+              print(f'Matrix processing error: {str(e)}')
+              exit(1)
           "
 
       - name: Execute Package Name Dynamic Alignment
@@ -137,11 +143,11 @@ jobs:
               'android.permission.FOREGROUND_SERVICE'
           ]
           
-          ET.register_namespace('android', '[http://schemas.android.com/apk/res/android](http://schemas.android.com/apk/res/android)')
+          ET.register_namespace('android', 'http://schemas.android.com/apk/res/android')
           tree = ET.parse('$MANIFEST_PATH')
           root = tree.getroot()
           
-          existing = [p.get('{[http://schemas.android.com/apk/res/android](http://schemas.android.com/apk/res/android)}name') for p in root.findall('uses-permission')]
+          existing = [p.get('{http://schemas.android.com/apk/res/android}name') for p in root.findall('uses-permission')]
           
           for perm in permissions:
               if perm not in existing:
