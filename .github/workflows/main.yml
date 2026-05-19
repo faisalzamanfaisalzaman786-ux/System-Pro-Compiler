@@ -30,11 +30,57 @@ jobs:
           mkdir -p gradle/wrapper
           wget -O gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.5.0/gradle/wrapper/gradle-wrapper.jar
 
+      - name: Dynamic Android Manifest and Resource Engine
+        run: |
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-mdpi
+          mkdir -p app/src/main/res/mipmap-xhdpi
+          mkdir -p app/src/main/res/mipmap-xxhdpi
+          mkdir -p app/src/main/res/mipmap-xxxhdpi
+
+          echo '<?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="@string/app_name"
+                  android:roundIcon="@mipmap/ic_launcher_round"
+                  android:supportsRtl="true"
+                  android:theme="@style/Theme.SystemPro">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>' > app/src/main/AndroidManifest.xml
+
+          echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">System Pro</string></resources>' > app/src/main/res/values/strings.xml
+          
+          echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.DarkActionBar"><item name="colorPrimary">#FFFF00</item><item name="colorPrimaryVariant">#00FFFF</item><item name="colorOnPrimary">#000000</item></style></resources>' > app/src/main/res/values/themes.xml
+
+          echo '<?xml version="1.0" encoding="utf-8"?>
+          <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent">
+              <Button
+                  android:id="@+id/buttonDot"
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="." />
+          </RelativeLayout>' > app/src/main/res/layout/activity_main.xml
+
       - name: Clean Cache Before Execution
         run: ./gradlew clean
 
       - name: Extract Code Matrix Payload
         run: |
+          echo "Build Timestamp: $(date +'%Y-%m-%d %H:%M:%S PKT')"
           echo "Processing payload..."
 
       - name: Dynamically Inject Package and Code Matrix
