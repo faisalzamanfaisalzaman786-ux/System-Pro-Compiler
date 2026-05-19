@@ -25,6 +25,11 @@ jobs:
       - name: Grant Execute Permission to Gradlew
         run: chmod +x gradlew
 
+      - name: Download Missing Gradle Wrapper Jar
+        run: |
+          mkdir -p gradle/wrapper
+          wget -O gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.5.0/gradle/wrapper/gradle-wrapper.jar
+
       - name: Clean Cache Before Execution
         run: ./gradlew clean
 
