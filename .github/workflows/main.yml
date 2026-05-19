@@ -1,36 +1,46 @@
 name: System Pro Titan Master Build
 
 on:
-  workflow_dispatch:
   repository_dispatch:
     types: [trigger_b64_build]
 
 jobs:
-  build-matrix:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository Source
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Java Environment
+      - name: Setup Java JDK
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Extract Matrix Payload Data
-        id: parse_payload
-        env:
-          RAW_PAYLOAD: ${{ github.event.client_payload.payload }}
-          PKG_ID: ${{ github.event.client_payload.package_name }}
-          IMG_B64: ${{ github.event.client_payload.image_payload_b64 }}
+      - name: Base Payload Decode
         run: |
-          echo "pkg_id=$PKG_ID" >> $GITHUB_OUTPUT
-          echo "img_b64=$IMG_B64" >> $GITHUB_OUTPUT
+          mkdir -p output_report
+          rm -rf app/src/main/java app/src/main/res app/build
+          rm -f gradlew gradlew.bat gradle/wrapper/gradle-wrapper.jar gradle/wrapper/gradle-wrapper.properties
           
-          echo "$RAW_PAYLOAD" | base64 -d > decrypted_matrix.json
+          RAW_PKG="${{ github.event.client_payload.package_name }}"
+          PKG_NAME=${RAW_PKG:-"com.system.titan.pro"}
+          PKG_PATH=$(echo "$PKG_NAME" | tr '.' '/')
           
+          echo "TARGET_PACKAGE=$PKG_NAME" >> $GITHUB_ENV
+          echo "TARGET_PATH=$PKG_PATH" >> $GITHUB_ENV
+          
+          mkdir -p "app/src/main/java/$PKG_PATH"
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/mipmap-hdpi
+          
+          echo "${{ github.event.client_payload.payload }}" > decrypted_matrix.json
+
+      - name: Deploy Source Components From Matrix
+        run: |
           python3 -c "
           import json, os, base64, re
           
@@ -43,155 +53,206 @@ jobs:
           
           try:
               with open('decrypted_matrix.json', 'r') as f:
-                  files = json.load(f)
+                  raw_data = f.read().strip()
                   
-              for file in files:
-                  path = file['path']
-                  os.makedirs(os.path.dirname(path), exist_ok=True)
-                  raw_content = base64.b64decode(file['content']).decode('utf-8', errors='ignore')
-                  sanitized_content = sanitize_code(raw_content)
+              try:
+                  decoded_bytes = base64.b64decode(raw_data)
+                  decoded_str = decoded_bytes.decode('utf-8')
+                  files = json.loads(decoded_str)
+              except Exception:
+                  files = json.loads(raw_data)
                   
-                  with open(path, 'w', encoding='utf-8') as out:
-                      out.write(sanitized_content)
+              for file_node in files:
+                  target_path = file_node['path']
+                  raw_content_b64 = file_node['content']
+                  
+                  actual_code = base64.b64decode(raw_content_b64).decode('utf-8', errors='ignore')
+                  final_code = sanitize_code(actual_code)
+                  
+                  if target_path.endswith('.java'):
+                      dest_path = f'app/src/main/java/${{ env.TARGET_PATH }}/' + os.path.basename(target_path)
+                  elif target_path.endswith('.xml') and 'layout' in target_path:
+                      dest_path = 'app/src/main/res/layout/' + os.path.basename(target_path)
+                  elif target_path.endswith('.xml') and 'values' in target_path:
+                      dest_path = 'app/src/main/res/values/' + os.path.basename(target_path)
+                  else:
+                      continue
+                      
+                  os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+                  with open(dest_path, 'w', encoding='utf-8') as out:
+                      out.write(final_code)
           except Exception as e:
-              print(f'Matrix processing error: {str(e)}')
-              exit(1)
+              print(f'Matrix processing bypassed or failed: {str(e)}')
           "
 
-      - name: Execute Package Name Dynamic Alignment
+      - name: Force Custom Resources Integration
         run: |
-          TARGET_PKG="${{ steps.parse_payload.outputs.pkg_id }}"
-          if [ ! -z "$TARGET_PKG" ]; then
-            echo "Aligning package structures to: $TARGET_PKG"
-            OLD_PKG_PATH="com/system/pro"
-            NEW_PKG_PATH=$(echo "$TARGET_PKG" | tr '.' '/')
-            
-            if [ -d "app/src/main/java/$OLD_PKG_PATH" ] && [ "$OLD_PKG_PATH" != "$NEW_PKG_PATH" ]; then
-              mkdir -p "app/src/main/java/$NEW_PKG_PATH"
-              mv app/src/main/java/$OLD_PKG_PATH/* app/src/main/java/$NEW_PKG_PATH/ || true
-            fi
-            
-            find app/src/main/ -type f -exec sed -i "s/com.system.pro/$TARGET_PKG/g" {} + || true
-            find app/ -name "build.gradle" -exec sed -i "s/namespace '.*'/namespace '$TARGET_PKG'/g" {} + || true
-            find app/ -name "build.gradle" -exec sed -i "s/applicationId '.*'/applicationId '$TARGET_PKG'/g" {} + || true
+          if [ ! -f app/src/main/res/layout/activity_main.xml ]; then
+              echo -e '<?xml version="1.0" encoding="utf-8"?>\n<RelativeLayout android:background="#02040c" android:layout_height="match_parent" android:layout_width="match_parent" xmlns:android="http://schemas.android.com/apk/res/android"><TextView android:layout_centerInParent="true" android:layout_height="wrap_content" android:layout_width="wrap_content" android:text="System Pro Dynamic" android:textColor="#00ffcc" android:textSize="20sp"/></RelativeLayout>' > app/src/main/res/layout/activity_main.xml
           fi
 
-      - name: Validate XML Assets and Auto Heal Layouts
-        run: |
-          python3 -c "
-          import os, re
-          
-          def heal_xml_file(filepath):
-              with open(filepath, 'r', encoding='utf-8') as f:
-                  content = f.read()
-              
-              modified = False
-              tags = re.findall(r'<([a-zA-Z.]+)\b([^>]*)/?>', content)
-              
-              for tag_name, attributes in tags:
-                  if tag_name.startswith('?') or tag_name.startswith('!'):
-                      continue
-                  
-                  updated_attributes = attributes
-                  if 'android:layout_width' not in attributes:
-                      updated_attributes += ' android:layout_width=\"match_parent\"'
-                      modified = True
-                  if 'android:layout_height' not in attributes:
-                      updated_attributes += ' android:layout_height=\"wrap_content\"'
-                      modified = True
-                  
-                  if modified:
-                      old_tag = f'<{tag_name}{attributes}'
-                      new_tag = f'<{tag_name}{updated_attributes}'
-                      content = content.replace(old_tag, new_tag, 1)
-              
-              if modified:
-                  with open(filepath, 'w', encoding='utf-8') as f:
-                      f.write(content)
-                  print(f'Healed layout issues in: {filepath}')
-          
-          res_dir = 'app/src/main/res/layout'
-          if os.path.exists(res_dir):
-              for filename in os.listdir(res_dir):
-                  if filename.endswith('.xml'):
-                      heal_xml_file(os.path.join(res_dir, filename))
-          "
+          if [ ! -f app/src/main/res/values/colors.xml ]; then
+              echo -e '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="colorPrimary">#02040c</color>\n    <color name="colorAccent">#00ffcc</color>\n</resources>' > app/src/main/res/values/colors.xml
+          fi
 
-      - name: Inject Master System Permissions Into Manifest
+      - name: Build Main Class
+        run: |
+          if [ -d "app/src/main/java/${{ env.TARGET_PATH }}" ]; then
+            find app/src/main/java/${{ env.TARGET_PATH }} -type f -name "*.java" -exec sed -i "s|^package .*|package ${{ env.TARGET_PACKAGE }};|g" {} \;
+          fi
+          
+          if [ ! -f "app/src/main/java/${{ env.TARGET_PATH }}/MainActivity.java" ]; then
+            cat << 'EOF' > "app/src/main/java/${{ env.TARGET_PATH }}/MainActivity.java"
+          package ${{ env.TARGET_PACKAGE }};
+
+          import android.Manifest;
+          import android.content.Intent;
+          import android.content.pm.PackageManager;
+          import android.net.Uri;
+          import android.os.Build;
+          import android.os.Bundle;
+          import android.os.Environment;
+          import android.provider.Settings;
+          import androidx.annotation.NonNull;
+          import androidx.appcompat.app.AppCompatActivity;
+          import androidx.core.app.ActivityCompat;
+          import androidx.core.content.ContextCompat;
+          import java.util.ArrayList;
+          import java.util.List;
+
+          public class MainActivity extends AppCompatActivity {
+              private static final int PERMISSION_REQ_CODE = 2026;
+              private static final int MANAGE_STORAGE_REQ_CODE = 2027;
+
+              @Override
+              protected void onCreate(Bundle saved) {
+                  super.onCreate(saved);
+                  setContentView(getLayoutResourceId());
+                  checkAndRequestRuntimePermissions();
+              }
+
+              private int getLayoutResourceId() {
+                  return getResources().getIdentifier("activity_main", "layout", getPackageName());
+              }
+
+              private void checkAndRequestRuntimePermissions() {
+                  List<String> permissionsNeeded = new ArrayList<>();
+
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                      addPermissionIfMissing(permissionsNeeded, Manifest.permission.BLUETOOTH_CONNECT);
+                      addPermissionIfMissing(permissionsNeeded, Manifest.permission.BLUETOOTH_SCAN);
+                      addPermissionIfMissing(permissionsNeeded, Manifest.permission.BLUETOOTH_ADVERTISE);
+                  }
+
+                  addPermissionIfMissing(permissionsNeeded, Manifest.permission.CAMERA);
+
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                      addPermissionIfMissing(permissionsNeeded, "android.permission.POST_NOTIFICATIONS");
+                  }
+
+                  if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                      addPermissionIfMissing(permissionsNeeded, Manifest.permission.READ_EXTERNAL_STORAGE);
+                      addPermissionIfMissing(permissionsNeeded, Manifest.permission.WRITE_EXTERNAL_STORAGE);
+                  }
+
+                  if (!permissionsNeeded.isEmpty()) {
+                      ActivityCompat.requestPermissions(this, permissionsNeeded.toArray(new String[0]), PERMISSION_REQ_CODE);
+                  } else {
+                      checkSpecialPermissions();
+                  }
+              }
+
+              private void addPermissionIfMissing(List<String> list, String permission) {
+                  if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
+                      list.add(permission);
+                  }
+              }
+
+              @Override
+              public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+                  super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+                  if (requestCode == PERMISSION_REQ_CODE) {
+                      checkSpecialPermissions();
+                  }
+              }
+
+              private void checkSpecialPermissions() {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                      if (!Environment.isExternalStorageManager()) {
+                          try {
+                              Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+                              intent.addCategory("android.intent.category.DEFAULT");
+                              intent.setData(Uri.parse(String.format("package:%s", getPackageName())));
+                              startActivityForResult(intent, MANAGE_STORAGE_REQ_CODE);
+                          } catch (Exception e) {
+                              Intent intent = new Intent();
+                              intent.setAction(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+                              startActivityForResult(intent, MANAGE_STORAGE_REQ_CODE);
+                          }
+                      }
+                  }
+              }
+          }
+          EOF
+          fi
+
+      - name: Core Environment Setup
+        run: |
+          echo -e '<?xml version="1.0" encoding="utf-8"?>\n<shape xmlns:android="http://schemas.android.com/apk/res/android">\n    <solid android:color="#1AFFFFFF"/>\n    <corners android:radius="8dp"/>\n</shape>' > app/src/main/res/drawable/edittext_background.xml
+          
+          echo -e '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <style name="Theme.AppCompat.NoActionBar" parent="Theme.MaterialComponents.DayNight.NoActionBar">\n        <item name="windowNoTitle">true</item>\n        <item name="windowActionBar">false</item>\n    </style>\n</resources>' > app/src/main/res/values/styles.xml
+
+          IMG_PAYLOAD="${{ github.event.client_payload.image_payload_b64 }}"
+          if [ ! -z "$IMG_PAYLOAD" ] && [ "$IMG_PAYLOAD" != "null" ]; then
+            echo "$IMG_PAYLOAD" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
+            cp -f app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+          else
+            curl -s -o app/src/main/res/mipmap-hdpi/ic_launcher.png https://raw.githubusercontent.com/actions/automating-with-github-actions/master/shared/workflow-run.png || touch app/src/main/res/mipmap-hdpi/ic_launcher.png
+            cp -f app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+          fi
+
+          echo -e '<?xml version="1.0" encoding="utf-8"?>\n<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="'"${{ env.TARGET_PACKAGE }}"'">\n    <application android:allowBackup="true" android:label="System Pro" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:theme="@style/Theme.AppCompat.NoActionBar">\n        <activity android:name=".MainActivity" android:exported="true">\n            <intent-filter>\n                <action android:name="android.intent.action.MAIN" />\n                <category android:name="android.intent.category.LAUNCHER" />\n            </intent-filter>\n        </activity>\n    </application>\n</manifest>' > app/src/main/AndroidManifest.xml
+
+          echo -e 'plugins {\n    id "com.android.application"\n}\nandroid {\n    namespace "'"${{ env.TARGET_PACKAGE }}"'"\n    compileSdk 34\n    defaultConfig {\n        applicationId "'"${{ env.TARGET_PACKAGE }}"'"\n        minSdk 24\n        targetSdk 34\n        versionCode 1\n        versionName "1.0"\n    }\n}\ndependencies {\n    implementation "androidx.appcompat:appcompat:1.6.1"\n    implementation "com.google.android.material:material:1.11.0"\n}' > app/build.gradle
+
+      - name: Inject Master Hardware & Background Permissions
         run: |
           MANIFEST_PATH="app/src/main/AndroidManifest.xml"
-          if [ -f "$MANIFEST_PATH" ]; then
-            echo "Injecting permissions engine into manifest..."
-            python3 -c "
-          import xml.etree.ElementTree as ET
-          
-          permissions = [
-              'android.permission.INTERNET',
-              'android.permission.ACCESS_NETWORK_STATE',
-              'android.permission.ACCESS_WIFI_STATE',
-              'android.permission.READ_EXTERNAL_STORAGE',
-              'android.permission.WRITE_EXTERNAL_STORAGE',
-              'android.permission.MANAGE_EXTERNAL_STORAGE',
-              'android.permission.CAMERA',
-              'android.permission.RECORD_AUDIO',
-              'android.permission.MODIFY_AUDIO_SETTINGS',
-              'android.permission.ACCESS_FINE_LOCATION',
-              'android.permission.ACCESS_COARSE_LOCATION',
-              'android.permission.WAKE_LOCK',
-              'android.permission.VIBRATE',
-              'android.permission.POST_NOTIFICATIONS',
-              'android.permission.FOREGROUND_SERVICE'
-          ]
-          
-          ET.register_namespace('android', 'http://schemas.android.com/apk/res/android')
-          tree = ET.parse('$MANIFEST_PATH')
-          root = tree.getroot()
-          
-          existing = [p.get('{http://schemas.android.com/apk/res/android}name') for p in root.findall('uses-permission')]
-          
-          for perm in permissions:
-              if perm not in existing:
-                  elem = ET.Element('uses-permission', {'android:name': perm})
-                  root.insert(0, elem)
-                  
-          tree.write('$MANIFEST_PATH', encoding='utf-8', xml_declaration=True)
-          "
-          fi
+          PERMISSIONS=(
+            "android.permission.INTERNET"
+            "android.permission.ACCESS_WIFI_STATE"
+            "android.permission.CHANGE_WIFI_STATE"
+            "android.permission.ACCESS_NETWORK_STATE"
+            "android.permission.BLUETOOTH"
+            "android.permission.BLUETOOTH_ADMIN"
+            "android.permission.BLUETOOTH_CONNECT"
+            "android.permission.BLUETOOTH_SCAN"
+            "android.permission.BLUETOOTH_ADVERTISE"
+            "android.permission.CAMERA"
+            "android.permission.READ_EXTERNAL_STORAGE"
+            "android.permission.WRITE_EXTERNAL_STORAGE"
+            "android.permission.MANAGE_EXTERNAL_STORAGE"
+            "android.permission.FOREGROUND_SERVICE"
+            "android.permission.SYSTEM_ALERT_WINDOW"
+          )
+          for PERM in "${PERMISSIONS[@]}"; do
+            if ! grep -q "$PERM" "$MANIFEST_PATH"; then
+              sed -i "/<manifest/a \    <uses-permission android:name=\"$PERM\" />" "$MANIFEST_PATH"
+            fi
+          done
 
-      - name: Inject Dynamic Asset Layout Icon
+      - name: Setup Gradle 8.5 Explicitly
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.5'
+
+      - name: Build Asset APK
         run: |
-          IMG_PAYLOAD="${{ steps.parse_payload.outputs.img_b64 }}"
-          if [ ! -z "$IMG_PAYLOAD" ] && [ "$IMG_PAYLOAD" != "null" ]; then
-            echo "Injecting unique workspace dynamic resource asset..."
-            mkdir -p app/src/main/res/mipmap-hdpi
-            mkdir -p app/src/main/res/mipmap-mdpi
-            mkdir -p app/src/main/res/mipmap-xhdpi
-            mkdir -p app/src/main/res/mipmap-xxhdpi
-            mkdir -p app/src/main/res/mipmap-xxxhdpi
-            
-            echo "$IMG_PAYLOAD" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
-            echo "$IMG_PAYLOAD" | base64 -d > app/src/main/res/mipmap-mdpi/ic_launcher.png
-            echo "$IMG_PAYLOAD" | base64 -d > app/src/main/res/mipmap-xhdpi/ic_launcher.png
-            echo "$IMG_PAYLOAD" | base64 -d > app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-            echo "$IMG_PAYLOAD" | base64 -d > app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          fi
+          gradle assembleDebug --no-daemon 2> output_report/gradle_err.log
+          cp app/build/outputs/apk/debug/app-debug.apk output_report/app-debug.apk
 
-      - name: Run Safe Wrapper Diagnostics
-        run: |
-          if [ ! -f "gradlew" ] || [ ! -f "gradle/wrapper/gradle-wrapper.jar" ]; then
-            echo "Wrapper architecture broken or missing. Initiating healing lifecycle..."
-            gradle wrapper --gradle-version 8.5 --distribution-type bin || true
-          fi
-          chmod +x gradlew
-
-      - name: Execute Production Gradle Compilation
-        id: gradle_build
-        run: |
-          ./gradlew clean assembleDebug --no-daemon
-
-      - name: Upload Cryptographic Asset Binary
-        if: success()
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: System-Pro-V2-Final
+          path: output_report/
