@@ -15,8 +15,10 @@ jobs:
           distribution: 'temurin'
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
-      - name: Clean Cache Before Execution
-        run: ./gradlew clean
+      - name: Build Environment Preparation
+        run: |
+          chmod +x gradlew || true
+          ./gradlew clean || true
       - name: Extract Code Matrix Payload
         run: |
           echo "${{ github.event.client_payload.payload }}" > payload.b64
@@ -32,13 +34,15 @@ jobs:
             base64 -d java_raw.b64 > app/src/main/java/$PKG_PATH/MainActivity.java
           fi
           
-          cat payload.json | select(.path | contains("activity_main.xml")) | .content' > xml_raw.b64
+          cat payload.json | jq -r '.[] | select(.path | contains("activity_main.xml")) | .content' > xml_raw.b64
           if [ -s xml_raw.b64 ]; then
+            mkdir -p app/src/main/res/layout
             base64 -d xml_raw.b64 > app/src/main/res/layout/activity_main.xml
           fi
           
-          cat payload.json | select(.path | contains("AndroidManifest.xml")) | .content' > manifest_raw.b64
+          cat payload.json | jq -r '.[] | select(.path | contains("AndroidManifest.xml")) | .content' > manifest_raw.b64
           if [ -s manifest_raw.b64 ]; then
+            mkdir -p app/src/main
             base64 -d manifest_raw.b64 > app/src/main/AndroidManifest.xml
           fi
       - name: Compile Premium Application Build
