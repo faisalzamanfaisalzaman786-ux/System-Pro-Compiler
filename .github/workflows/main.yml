@@ -176,14 +176,3 @@ jobs:
         with:
           name: System-Pro-V2-Final
           path: output_report/
-
-      - name: Post-Build Reset and Clean Factory
-        if: always()
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action Engine"
-          git add -A
-          if ! git diff-index --quiet HEAD; then
-            git commit -m "Ecosystem Automated Reset: Workspace wiped back to standard leaf node"
-            git push origin main
-          fi
