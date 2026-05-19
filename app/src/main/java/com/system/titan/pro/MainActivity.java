@@ -1,161 +1,90 @@
-package com.example.app;
+package com.system.titan.pro;
 
-import android.app.Activity;
+import android.Manifest;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
-import android.view.View;
-import android.widget.Button;
-import android.widget.TextView;
+import android.os.Environment;
+import android.provider.Settings;
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import java.util.ArrayList;
+import java.util.List;
 
-public class MainActivity extends Activity implements View.OnClickListener {
-
-    private TextView txtInput, txtResult;
-    private String processExpression = "";
-    private boolean isOpLast = false;
+public class MainActivity extends AppCompatActivity {
+    private static final int PERMISSION_REQ_CODE = 2026;
+    private static final int MANAGE_STORAGE_REQ_CODE = 2027;
 
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(getResources().getIdentifier("activity_main", "layout", getPackageName()));
-
-        txtInput = findViewById(getResources().getIdentifier("txtInput", "id", getPackageName()));
-        txtResult = findViewById(getResources().getIdentifier("txtResult", "id", getPackageName()));
-
-        int[] btnIds = {
-                getResources().getIdentifier("btn0", "id", getPackageName()),
-                getResources().getIdentifier("btn1", "id", getPackageName()),
-                getResources().getIdentifier("btn2", "id", getPackageName()),
-                getResources().getIdentifier("btn3", "id", getPackageName()),
-                getResources().getIdentifier("btn4", "id", getPackageName()),
-                getResources().getIdentifier("btn5", "id", getPackageName()),
-                getResources().getIdentifier("btn6", "id", getPackageName()),
-                getResources().getIdentifier("btn7", "id", getPackageName()),
-                getResources().getIdentifier("btn8", "id", getPackageName()),
-                getResources().getIdentifier("btn9", "id", getPackageName()),
-                getResources().getIdentifier("btnC", "id", getPackageName()),
-                getResources().getIdentifier("btnDot", "id", getPackageName()),
-                getResources().getIdentifier("btnPlus", "id", getPackageName()),
-                getResources().getIdentifier("btnSub", "id", getPackageName()),
-                getResources().getIdentifier("btnMul", "id", getPackageName()),
-                getResources().getIdentifier("btnDiv", "id", getPackageName()),
-                getResources().getIdentifier("btnEqual", "id", getPackageName()),
-                getResources().getIdentifier("btnPercent", "id", getPackageName()),
-                getResources().getIdentifier("btnBrack", "id", getPackageName())
-        };
-
-        for (int id : btnIds) {
-            View btn = findViewById(id);
-            if (btn != null) {
-                btn.setOnClickListener(this);
-            }
-        }
+    protected void onCreate(Bundle saved) {
+        super.onCreate(saved);
+        setContentView(getLayoutResourceId());
+        checkAndRequestRuntimePermissions();
     }
 
-    @Override
-    public void onClick(View v) {
-        Button btn = (Button) v;
-        String btnText = btn.getText().toString();
+    private int getLayoutResourceId() {
+        return getResources().getIdentifier("activity_main", "layout", getPackageName());
+    }
 
-        if (btnText.equals("C")) {
-            processExpression = "";
-            txtInput.setText("");
-            txtResult.setText("0");
-            isOpLast = false;
-            return;
+    private void checkAndRequestRuntimePermissions() {
+        List<String> permissionsNeeded = new ArrayList<>();
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            addPermissionIfMissing(permissionsNeeded, Manifest.permission.BLUETOOTH_CONNECT);
+            addPermissionIfMissing(permissionsNeeded, Manifest.permission.BLUETOOTH_SCAN);
+            addPermissionIfMissing(permissionsNeeded, Manifest.permission.BLUETOOTH_ADVERTISE);
         }
 
-        if (btnText.equals("=")) {
-            calculateFinalResult();
-            return;
+        addPermissionIfMissing(permissionsNeeded, Manifest.permission.CAMERA);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            addPermissionIfMissing(permissionsNeeded, "android.permission.POST_NOTIFICATIONS");
         }
 
-        if (btnText.equals("+") || btnText.equals("-") || btnText.equals("x") || btnText.equals("/")) {
-            if (processExpression.isEmpty() || isOpLast) return;
-            isOpLast = true;
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            addPermissionIfMissing(permissionsNeeded, Manifest.permission.READ_EXTERNAL_STORAGE);
+            addPermissionIfMissing(permissionsNeeded, Manifest.permission.WRITE_EXTERNAL_STORAGE);
+        }
+
+        if (!permissionsNeeded.isEmpty()) {
+            ActivityCompat.requestPermissions(this, permissionsNeeded.toArray(new String[0]), PERMISSION_REQ_CODE);
         } else {
-            isOpLast = false;
-        }
-
-        processExpression += btnText;
-        txtInput.setText(processExpression);
-    }
-
-    private void calculateFinalResult() {
-        if (processExpression.isEmpty() || isOpLast) return;
-        try {
-            String exp = processExpression.replace("x", "*");
-            double res = evaluateSimpleExpression(exp);
-            
-            if (res == (long) res) {
-                txtResult.setText(String.valueOf((long) res));
-            } else {
-                txtResult.setText(String.valueOf(res));
-            }
-        } catch (Exception e) {
-            txtResult.setText("Error");
+            checkSpecialPermissions();
         }
     }
 
-    private double evaluateSimpleExpression(String expression) {
-        // ٹائٹن ماسٹر لائٹ ویٹ پارسر برائے کیلکولیشن
-        return new Object() {
-            int pos = -1, ch;
+    private void addPermissionIfMissing(List<String> list, String permission) {
+        if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
+            list.add(permission);
+        }
+    }
 
-            void nextChar() {
-                ch = (++pos < expression.length()) ? expression.charAt(pos) : -1;
-            }
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == PERMISSION_REQ_CODE) {
+            checkSpecialPermissions();
+        }
+    }
 
-            boolean eat(int charToEat) {
-                while (ch == ' ') nextChar();
-                if (ch == charToEat) {
-                    nextChar();
-                    return true;
-                }
-                return false;
-            }
-
-            double parse() {
-                nextChar();
-                double x = parseExpression();
-                if (pos < expression.length()) throw new RuntimeException("Unexpected: " + (char)ch);
-                return x;
-            }
-
-            double parseExpression() {
-                double x = parseTerm();
-                for (;;) {
-                    if      (eat('+')) x += parseTerm(); // Addition
-                    else if (eat('-')) x -= parseTerm(); // Subtraction
-                    else return x;
+    private void checkSpecialPermissions() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (!Environment.isExternalStorageManager()) {
+                try {
+                    Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+                    intent.addCategory("android.intent.category.DEFAULT");
+                    intent.setData(Uri.parse(String.format("package:%s", getPackageName())));
+                    startActivityForResult(intent, MANAGE_STORAGE_REQ_CODE);
+                } catch (Exception e) {
+                    Intent intent = new Intent();
+                    intent.setAction(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+                    startActivityForResult(intent, MANAGE_STORAGE_REQ_CODE);
                 }
             }
-
-            double parseTerm() {
-                double x = parseFactor();
-                for (;;) {
-                    if      (eat('*')) x *= parseFactor(); // Multiplication
-                    else if (eat('/')) x /= parseFactor(); // Division
-                    else return x;
-                }
-            }
-
-            double parseFactor() {
-                if (eat('+')) return parseFactor(); 
-                if (eat('-')) return -parseFactor(); 
-
-                double x;
-                int startPos = this.pos;
-                if (eat('(')) { 
-                    x = parseExpression();
-                    eat(')');
-                } else if ((ch >= '0' && ch <= '9') || ch == '.') { 
-                    while ((ch >= '0' && ch <= '9') || ch == '.') nextChar();
-                    x = Double.parseDouble(expression.substring(startPos, this.pos));
-                } else {
-                    throw new RuntimeException("Unexpected: " + (char)ch);
-                }
-                return x;
-            }
-        }.parse();
+        }
     }
 }
