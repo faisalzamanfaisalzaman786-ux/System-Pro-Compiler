@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
+        <item name="colorPrimary">#FFFF00</item> <item name="colorPrimaryVariant">#00FFFF</item> <item name="colorOnPrimary">#000000</item>
+    </style>
+</resources>
