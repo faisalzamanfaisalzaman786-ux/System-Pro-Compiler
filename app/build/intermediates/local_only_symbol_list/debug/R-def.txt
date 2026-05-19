@@ -3,7 +3,6 @@ local
 color colorAccent
 color colorPrimary
 drawable edittext_background
-layout activity_main
 mipmap ic_launcher
 mipmap ic_launcher_round
 style Theme.AppCompat.NoActionBar
