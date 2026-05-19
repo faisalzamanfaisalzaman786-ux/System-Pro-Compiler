@@ -1,6 +1,7 @@
-name: System Pro Titan Build Engine
+name: System Pro Titan Master Build
 
 on:
+  workflow_dispatch:
   repository_dispatch:
     types: [trigger_b64_build]
 
@@ -9,54 +10,182 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Source Code
-      uses: actions/checkout@v4
+      - name: Checkout Repository Source
+        uses: actions/checkout@v4
 
-    - name: Setup Java Environment
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'zulu'
-        java-version: '17'
+      - name: Setup Java Environment
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
 
-    - name: Setup Android SDK
-      uses: android-actions/setup-android@v3
+      - name: Extract Matrix Payload Data
+        id: parse_payload
+        run: |
+          RAW_PAYLOAD='${{ github.event.client_payload.payload }}'
+          PKG_ID='${{ github.event.client_payload.package_name }}'
+          IMG_B64='${{ github.event.client_payload.image_payload_b64 }}'
+          
+          echo "pkg_id=$PKG_ID" >> $GITHUB_OUTPUT
+          echo "img_b64=$IMG_B64" >> $GITHUB_OUTPUT
+          
+          echo "$RAW_PAYLOAD" | base64 -d > decrypted_matrix.json
+          
+          python3 -c "
+          import json, os, base64, re
+          
+          def sanitize_code(code_str):
+              clean = re.sub(r'^```[a-zA-Z]*\n', '', code_str)
+              clean = re.sub(r'\n```$', '', clean)
+              return clean.strip()
+          
+          with open('decrypted_matrix.json', 'r') as f:
+              files = json.load(f)
+              
+          for file in files:
+              path = file['path']
+              os.makedirs(os.path.dirname(path), exist_ok=True)
+              raw_content = base64.b64decode(file['content']).decode('utf-8', errors='ignore')
+              sanitized_content = sanitize_code(raw_content)
+              
+              with open(path, 'w', encoding='utf-8') as out:
+                  out.write(sanitized_content)
+          "
 
-    - name: Process Matrix Input Payload
-      run: |
-        echo "${{ github.event.client_payload.payload }}" > payload.b64
-        jq -r '.[] | .path + " " + .content' <(echo "${{ github.event.client_payload.payload }}" | base64 -d) | while read -r file_path file_content; do
-          mkdir -p "$(dirname "$file_path")"
-          echo "$file_content" | base64 -d > "$file_path"
-        done
+      - name: Execute Package Name Dynamic Alignment
+        run: |
+          TARGET_PKG="${{ steps.parse_payload.outputs.pkg_id }}"
+          if [ ! -z "$TARGET_PKG" ]; then
+            echo "Aligning package structures to: $TARGET_PKG"
+            OLD_PKG_PATH="com/system/pro"
+            NEW_PKG_PATH=$(echo "$TARGET_PKG" | tr '.' '/')
+            
+            if [ -d "app/src/main/java/$OLD_PKG_PATH" ] && [ "$OLD_PKG_PATH" != "$NEW_PKG_PATH" ]; then
+              mkdir -p "app/src/main/java/$NEW_PKG_PATH"
+              mv app/src/main/java/$OLD_PKG_PATH/* app/src/main/java/$NEW_PKG_PATH/ || true
+            fi
+            
+            find app/src/main/ -type f -exec sed -i "s/com.system.pro/$TARGET_PKG/g" {} + || true
+            find app/ -name "build.gradle" -exec sed -i "s/namespace '.*'/namespace '$TARGET_PKG'/g" {} + || true
+            find app/ -name "build.gradle" -exec sed -i "s/applicationId '.*'/applicationId '$TARGET_PKG'/g" {} + || true
+          fi
 
-    - name: Inject Project Identity Configurations
-      run: |
-        PKG_ID="${{ github.event.client_payload.package_name }}"
-        find app/src/main/java -name "*.java" -exec sed -i "s/package .*/package $PKG_ID;/g" {} +
-        if [ -f app/build.gradle ]; then
-          sed -i "s/applicationId .*/applicationId \"$PKG_ID\"/g" app/build.gradle
-        fi
-        if [ -f app/build.gradle.kts ]; then
-          sed -i "s/applicationId = .*/applicationId = \"$PKG_ID\"/g" app/build.gradle.kts
-        fi
+      - name: Validate XML Assets and Auto Heal Layouts
+        run: |
+          python3 -c "
+          import os, re
+          
+          def heal_xml_file(filepath):
+              with open(filepath, 'r', encoding='utf-8') as f:
+                  content = f.read()
+              
+              modified = False
+              tags = re.findall(r'<([a-zA-Z.]+)\b([^>]*)/?>', content)
+              
+              for tag_name, attributes in tags:
+                  if tag_name.startswith('?') or tag_name.startswith('!'):
+                      continue
+                  
+                  updated_attributes = attributes
+                  if 'android:layout_width' not in attributes:
+                      updated_attributes += ' android:layout_width=\"match_parent\"'
+                      modified = True
+                  if 'android:layout_height' not in attributes:
+                      updated_attributes += ' android:layout_height=\"wrap_content\"'
+                      modified = True
+                  
+                  if modified:
+                      old_tag = f'<{tag_name}{attributes}'
+                      new_tag = f'<{tag_name}{updated_attributes}'
+                      content = content.replace(old_tag, new_tag, 1)
+              
+              if modified:
+                  with open(filepath, 'w', encoding='utf-8') as f:
+                      f.write(content)
+                  print(f'Healed layout issues in: {filepath}')
+          
+          res_dir = 'app/src/main/res/layout'
+          if os.path.exists(res_dir):
+              for filename in os.listdir(res_dir):
+                  if filename.endswith('.xml'):
+                      heal_xml_file(os.path.join(res_dir, filename))
+          "
 
-    - name: Process Application Asset Icon
-      if: ${{ github.event.client_payload.image_payload_b64 != '' }}
-      run: |
-        echo "${{ github.event.client_payload.image_payload_b64 }}" | base64 -d > app/src/main/res/mipmap-mdpi/ic_launcher.png
-        echo "${{ github.event.client_payload.image_payload_b64 }}" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
-        echo "${{ github.event.client_payload.image_payload_b64 }}" | base64 -d > app/src/main/res/mipmap-xhdpi/ic_launcher.png
-        echo "${{ github.event.client_payload.image_payload_b64 }}" | base64 -d > app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-        echo "${{ github.event.client_payload.image_payload_b64 }}" | base64 -d > app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-        cp app/src/main/res/mipmap-xhdpi/ic_launcher.png app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
+      - name: Inject Master System Permissions Into Manifest
+        run: |
+          MANIFEST_PATH="app/src/main/AndroidManifest.xml"
+          if [ -f "$MANIFEST_PATH" ]; then
+            echo "Injecting permissions engine into manifest..."
+            python3 -c "
+          import xml.etree.ElementTree as ET
+          
+          permissions = [
+              'android.permission.INTERNET',
+              'android.permission.ACCESS_NETWORK_STATE',
+              'android.permission.ACCESS_WIFI_STATE',
+              'android.permission.READ_EXTERNAL_STORAGE',
+              'android.permission.WRITE_EXTERNAL_STORAGE',
+              'android.permission.MANAGE_EXTERNAL_STORAGE',
+              'android.permission.CAMERA',
+              'android.permission.RECORD_AUDIO',
+              'android.permission.MODIFY_AUDIO_SETTINGS',
+              'android.permission.ACCESS_FINE_LOCATION',
+              'android.permission.ACCESS_COARSE_LOCATION',
+              'android.permission.WAKE_LOCK',
+              'android.permission.VIBRATE',
+              'android.permission.POST_NOTIFICATIONS',
+              'android.permission.FOREGROUND_SERVICE'
+          ]
+          
+          ET.register_namespace('android', 'http://schemas.android.com/apk/res/android')
+          tree = ET.parse('$MANIFEST_PATH')
+          root = tree.getroot()
+          
+          existing = [p.get('{http://schemas.android.com/apk/res/android}name') for p in root.findall('uses-permission')]
+          
+          for perm in permissions:
+              if perm not in existing:
+                  elem = ET.Element('uses-permission', {'android:name': perm})
+                  root.insert(0, elem)
+                  
+          tree.write('$MANIFEST_PATH', encoding='utf-8', xml_declaration=True)
+          "
+          fi
 
-    - name: Execute Production Gradle Compilation
-      run: |
-        chmod +x gradlew
-        ./gradlew assembleDebug
+      - name: Inject Dynamic Asset Layout Icon
+        run: |
+          IMG_PAYLOAD="${{ steps.parse_payload.outputs.img_b64 }}"
+          if [ ! -z "$IMG_PAYLOAD" ] && [ "$IMG_PAYLOAD" != "null" ]; then
+            echo "Injecting unique workspace dynamic resource asset..."
+            mkdir -p app/src/main/res/mipmap-hdpi
+            mkdir -p app/src/main/res/mipmap-mdpi
+            mkdir -p app/src/main/res/mipmap-xhdpi
+            mkdir -p app/src/main/res/mipmap-xxhdpi
+            mkdir -p app/src/main/res/mipmap-xxxhdpi
+            
+            echo "$IMG_PAYLOAD" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
+            echo "$IMG_PAYLOAD" | base64 -d > app/src/main/res/mipmap-mdpi/ic_launcher.png
+            echo "$IMG_PAYLOAD" | base64 -d > app/src/main/res/mipmap-xhdpi/ic_launcher.png
+            echo "$IMG_PAYLOAD" | base64 -d > app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            echo "$IMG_PAYLOAD" | base64 -d > app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          fi
 
-    - name: Upload Cryptographic Asset Binary
-      uses: actions/upload-artifact@v4
-      with:
-        name: SystemPro-Release-Package
-        path: app/build/outputs/apk/debug/app-debug.apk
+      - name: Run Safe Wrapper Diagnostics
+        run: |
+          if [ ! -f "gradlew" ] || [ ! -f "gradle/wrapper/gradle-wrapper.jar" ]; then
+            echo "Wrapper architecture broken or missing. Initiating healing lifecycle..."
+            gradle wrapper --gradle-version 8.5 --distribution-type bin || true
+          fi
+          chmod +x gradlew
+
+      - name: Execute Production Gradle Compilation
+        id: gradle_build
+        run: |
+          ./gradlew clean assembleDebug --no-daemon
+
+      - name: Upload Cryptographic Asset Binary
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
