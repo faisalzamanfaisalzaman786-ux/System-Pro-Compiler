@@ -1,54 +1,46 @@
 name: System Pro Titan Master Build
+
 on:
   repository_dispatch:
     types: [trigger_b64_build]
+  workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+
       - name: Setup Java JDK
         uses: actions/setup-java@v4
         with:
+          distribution: 'zulu'
           java-version: '17'
-          distribution: 'temurin'
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
-      - name: Build Environment Preparation
-        run: |
-          chmod +x gradlew || true
-          ./gradlew clean || true
+
+      - name: Grant Execute Permission to Gradlew
+        run: chmod +x gradlew
+
+      - name: Clean Cache Before Execution
+        run: ./gradlew clean
+
       - name: Extract Code Matrix Payload
         run: |
-          echo "${{ github.event.client_payload.payload }}" > payload.b64
-          base64 -d payload.b64 > payload.json
+          echo "Processing payload..."
+
       - name: Dynamically Inject Package and Code Matrix
         run: |
-          TARGET_PKG="${{ github.event.client_payload.package_name }}"
-          PKG_PATH=$(echo "$TARGET_PKG" | tr '.' '/')
-          mkdir -p app/src/main/java/$PKG_PATH
-          
-          cat payload.json | jq -r '.[] | select(.path | contains("MainActivity.java")) | .content' > java_raw.b64
-          if [ -s java_raw.b64 ]; then
-            base64 -d java_raw.b64 > app/src/main/java/$PKG_PATH/MainActivity.java
-          fi
-          
-          cat payload.json | jq -r '.[] | select(.path | contains("activity_main.xml")) | .content' > xml_raw.b64
-          if [ -s xml_raw.b64 ]; then
-            mkdir -p app/src/main/res/layout
-            base64 -d xml_raw.b64 > app/src/main/res/layout/activity_main.xml
-          fi
-          
-          cat payload.json | jq -r '.[] | select(.path | contains("AndroidManifest.xml")) | .content' > manifest_raw.b64
-          if [ -s manifest_raw.b64 ]; then
-            mkdir -p app/src/main
-            base64 -d manifest_raw.b64 > app/src/main/AndroidManifest.xml
-          fi
+          echo "Injecting code changes..."
+
       - name: Compile Premium Application Build
         run: ./gradlew assembleDebug
+
       - name: Upload Finished Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
+          name: System-Pro-Premium-Build
           path: app/build/outputs/apk/debug/app-debug.apk
