@@ -85,11 +85,11 @@ public class MainActivity extends AppCompatActivity {
                 case "-":
                     operator = "-";
                     break;
-                case "×":
+                case "\u00D7": // Multiplication sign
                 case "*":
                     operator = "*";
                     break;
-                case "÷":
+                case "\u00F7": // Division sign
                 case "/":
                     operator = "/";
                     break;
