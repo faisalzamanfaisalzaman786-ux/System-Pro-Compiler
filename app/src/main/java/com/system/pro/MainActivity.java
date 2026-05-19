@@ -22,6 +22,9 @@ public class MainActivity extends AppCompatActivity {
 
         displayTextView = findViewById(R.id.displayTextView);
 
+        // Initialize currentNumber to "0" at start
+        currentNumber.append("0");
+
         // Set OnClickListener for all number buttons
         int[] numberButtonIds = {
                 R.id.button0, R.id.button1, R.id.button2, R.id.button3, R.id.button4,
@@ -50,15 +53,25 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onClick(View v) {
             Button button = (Button) v;
+            String digit = button.getText().toString();
+
             if (isNewNumber) {
                 currentNumber.setLength(0); // Clear previous number if starting new
                 isNewNumber = false;
             }
-            // Prevent leading zero unless it's the only digit or followed by a decimal
-            if (currentNumber.toString().equals("0") && !button.getText().toString().equals(".")) {
+
+            // Prevent leading zero unless it's a decimal point
+            if (currentNumber.toString().equals("0") && !digit.equals(".")) {
                 currentNumber.setLength(0); // Clear the single '0'
             }
-            currentNumber.append(button.getText().toString());
+            
+            // Limit number of digits if desired (e.g., 15 for typical calculator) - optional
+            // if (currentNumber.length() >= 15 && !currentNumber.toString().contains(".")) {
+            //     Toast.makeText(MainActivity.this, "Digit limit reached", Toast.LENGTH_SHORT).show();
+            //     return;
+            // }
+
+            currentNumber.append(digit);
             updateDisplay();
         }
     };
@@ -67,20 +80,28 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onClick(View v) {
             Button button = (Button) v;
-            if (currentNumber.length() == 0 && operator.isEmpty()) {
-                // If no number entered yet, and no previous operator, do nothing
+            if (currentNumber.length() == 0 || (currentNumber.toString().equals("0") && firstOperand == 0 && operator.isEmpty())) {
+                // If no number entered yet (or just "0" initially), and no previous operand/operator, do nothing
                 return;
             }
 
             if (!operator.isEmpty() && !isNewNumber) {
-                // If an operator was already pressed and a number was entered, calculate previous
+                // If an operator was already pressed and a new number was entered, calculate previous
                 calculateResult();
+            } else if (!operator.isEmpty() && isNewNumber) {
+                // If operator already pressed, and no new number typed (e.g., 5 + * ),
+                // then just change the operator.
+                operator = button.getText().toString();
+                updateDisplay();
+                return;
             }
 
             firstOperand = Double.parseDouble(currentNumber.toString());
             operator = button.getText().toString();
             isNewNumber = true; // Next number entered will be a new one
-            updateDisplay(); // Show the current result or first operand
+            // No updateDisplay here, it will show previous result or first operand.
+            // When isNewNumber is true, `updateDisplay` shows `currentNumber` which might be the first operand.
+            // This is generally acceptable for showing the previous result before new number input.
         }
     };
 
@@ -102,11 +123,18 @@ public class MainActivity extends AppCompatActivity {
     private View.OnClickListener equalsClickListener = new View.OnClickListener() {
         @Override
         public void onClick(View v) {
-            if (!operator.isEmpty() && currentNumber.length() > 0) {
+            if (!operator.isEmpty() && currentNumber.length() > 0 && !isNewNumber) {
                 calculateResult();
                 operator = ""; // Clear operator after equals
                 isNewNumber = true; // Next number will be a new one
+            } else if (!operator.isEmpty() && currentNumber.length() > 0 && isNewNumber) {
+                // If equals pressed after an operator but no second number,
+                // treat second operand as same as first operand (e.g., 5 + = -> 10)
+                calculateResultWithSameOperand();
+                operator = "";
+                isNewNumber = true;
             }
+            // If operator is empty or currentNumber is empty, do nothing.
         }
     };
 
@@ -125,12 +153,25 @@ public class MainActivity extends AppCompatActivity {
     private View.OnClickListener backspaceClickListener = new View.OnClickListener() {
         @Override
         public void onClick(View v) {
-            if (currentNumber.length() > 1 && !isNewNumber) {
-                currentNumber.deleteCharAt(currentNumber.length() - 1);
+            if (isNewNumber) {
+                // If starting a new number (e.g., after operator or equals), backspace should not modify the previous result.
+                // It should act as if current number is "0" and clear it (or just do nothing if initial "0").
+                if (currentNumber.toString().equals("0")) {
+                    return; // Do nothing if it's already "0" and new.
+                } else {
+                    currentNumber.setLength(0);
+                    currentNumber.append("0");
+                    isNewNumber = true; // Keep it as a new number start
+                }
             } else {
-                currentNumber.setLength(0);
-                currentNumber.append("0");
-                isNewNumber = true; // If it becomes "0", treat it as a new number start
+                // If appending to current number
+                if (currentNumber.length() > 1) {
+                    currentNumber.deleteCharAt(currentNumber.length() - 1);
+                } else {
+                    currentNumber.setLength(0);
+                    currentNumber.append("0");
+                    isNewNumber = true; // If it becomes "0", treat it as a new number start
+                }
             }
             updateDisplay();
         }
@@ -138,13 +179,16 @@ public class MainActivity extends AppCompatActivity {
 
 
     private void calculateResult() {
+        double secondOperand;
+        // If currentNumber is still empty (e.g., operator pressed, then immediately equals),
+        // use firstOperand as secondOperand. This case is handled by calculateResultWithSameOperand
+        // in equalsClickListener logic, but good to be defensive.
         if (currentNumber.length() == 0) {
-            // If no second operand, just use the first operand as result
-            currentNumber.append(firstOperand);
-            return;
+            secondOperand = firstOperand; // Should not happen with refined equalsClickListener, but safe guard.
+        } else {
+            secondOperand = Double.parseDouble(currentNumber.toString());
         }
 
-        double secondOperand = Double.parseDouble(currentNumber.toString());
         double result = 0;
         boolean error = false;
 
@@ -167,8 +211,12 @@ public class MainActivity extends AppCompatActivity {
                 }
                 break;
             default:
-                error = true; // Should not happen if operator is set correctly
-                break;
+                // If operator is invalid or empty, do nothing or display an error
+                // This state should ideally not be reached if operator is correctly set.
+                currentNumber.setLength(0);
+                currentNumber.append(firstOperand); // Display first operand if no valid operation
+                updateDisplay();
+                return;
         }
 
         if (!error) {
@@ -182,6 +230,57 @@ public class MainActivity extends AppCompatActivity {
             firstOperand = result; // Result becomes the first operand for chained operations
         } else {
             // Reset state on error
+            currentNumber.setLength(0);
+            currentNumber.append("0");
+            firstOperand = 0;
+            operator = "";
+            isNewNumber = true;
+        }
+        updateDisplay();
+    }
+
+    private void calculateResultWithSameOperand() {
+        // This method is called when an operator is pending and equals is pressed without typing a second number.
+        // E.g., 5 + = should calculate 5 + 5.
+        // The second operand should be `firstOperand` from previous step, not the current number in display.
+        // Store the current number if it's the result of a previous operation.
+        double operandForCalculation = Double.parseDouble(currentNumber.toString());
+
+        double result = 0;
+        boolean error = false;
+
+        switch (operator) {
+            case "+":
+                result = firstOperand + operandForCalculation;
+                break;
+            case "-":
+                result = firstOperand - operandForCalculation;
+                break;
+            case "*":
+                result = firstOperand * operandForCalculation;
+                break;
+            case "/":
+                if (operandForCalculation == 0) {
+                    Toast.makeText(this, "Cannot divide by zero", Toast.LENGTH_SHORT).show();
+                    error = true;
+                } else {
+                    result = firstOperand / operandForCalculation;
+                }
+                break;
+            default:
+                error = true;
+                break;
+        }
+
+        if (!error) {
+            currentNumber.setLength(0);
+            if (result == (long) result) {
+                currentNumber.append((long) result);
+            } else {
+                currentNumber.append(result);
+            }
+            firstOperand = result; // The result becomes the first operand for potential further calculations (e.g. 5+=+=)
+        } else {
             currentNumber.setLength(0);
             currentNumber.append("0");
             firstOperand = 0;
