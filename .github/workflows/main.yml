@@ -1,118 +1,62 @@
-name: System Pro Titan Master Build
+name: System Pro Titan Build Engine
 
 on:
   repository_dispatch:
     types: [trigger_b64_build]
-  workflow_dispatch:
 
 jobs:
-  build:
+  build-matrix:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+    - name: Checkout Source Code
+      uses: actions/checkout@v4
 
-      - name: Setup Java JDK
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '17'
+    - name: Setup Java Environment
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'zulu'
+        java-version: '17'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
 
-      - name: Grant Execute Permission to Gradlew
-        run: chmod +x gradlew
+    - name: Process Matrix Input Payload
+      run: |
+        echo "${{ github.event.client_payload.payload }}" > payload.b64
+        jq -r '.[] | .path + " " + .content' <(echo "${{ github.event.client_payload.payload }}" | base64 -d) | while read -r file_path file_content; do
+          mkdir -p "$(dirname "$file_path")"
+          echo "$file_content" | base64 -d > "$file_path"
+        done
 
-      - name: Download Missing Gradle Wrapper Jar
-        run: |
-          mkdir -p gradle/wrapper
-          wget -O gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.5.0/gradle/wrapper/gradle-wrapper.jar
+    - name: Inject Project Identity Configurations
+      run: |
+        PKG_ID="${{ github.event.client_payload.package_name }}"
+        find app/src/main/java -name "*.java" -exec sed -i "s/package .*/package $PKG_ID;/g" {} +
+        if [ -f app/build.gradle ]; then
+          sed -i "s/applicationId .*/applicationId \"$PKG_ID\"/g" app/build.gradle
+        fi
+        if [ -f app/build.gradle.kts ]; then
+          sed -i "s/applicationId = .*/applicationId = \"$PKG_ID\"/g" app/build.gradle.kts
+        fi
 
-      - name: Cybernet Manifest and Valid Resource Injector Engine
-        run: |
-          mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/mipmap-hdpi
-          mkdir -p app/src/main/res/mipmap-mdpi
-          mkdir -p app/src/main/res/mipmap-xhdpi
-          mkdir -p app/src/main/res/mipmap-xxhdpi
-          mkdir -p app/src/main/res/mipmap-xxxhdpi
+    - name: Process Application Asset Icon
+      if: ${{ github.event.client_payload.image_payload_b64 != '' }}
+      run: |
+        echo "${{ github.event.client_payload.image_payload_b64 }}" | base64 -d > app/src/main/res/mipmap-mdpi/ic_launcher.png
+        echo "${{ github.event.client_payload.image_payload_b64 }}" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
+        echo "${{ github.event.client_payload.image_payload_b64 }}" | base64 -d > app/src/main/res/mipmap-xhdpi/ic_launcher.png
+        echo "${{ github.event.client_payload.image_payload_b64 }}" | base64 -d > app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+        echo "${{ github.event.client_payload.image_payload_b64 }}" | base64 -d > app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+        cp app/src/main/res/mipmap-xhdpi/ic_launcher.png app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
 
-          echo '<?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-              <uses-permission android:name="android.permission.CAMERA" />
-              <uses-permission android:name="android.permission.RECORD_AUDIO" />
-              
-              <application
-                  android:allowBackup="true"
-                  android:icon="@mipmap/ic_launcher"
-                  android:label="@string/app_name"
-                  android:roundIcon="@mipmap/ic_launcher_round"
-                  android:supportsRtl="true"
-                  android:theme="@style/Theme.SystemPro">
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>' > app/src/main/AndroidManifest.xml
+    - name: Execute Production Gradle Compilation
+      run: |
+        chmod +x gradlew
+        ./gradlew assembleDebug
 
-          echo '<?xml version="1.0" encoding="utf-8"?><resources><string name="app_name">System Pro</string></resources>' > app/src/main/res/values/strings.xml
-          
-          echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="Theme.SystemPro" parent="Theme.MaterialComponents.DayNight.NoActionBar"><item name="colorPrimary">#FFFF00</item><item name="colorPrimaryVariant">#00FFFF</item><item name="colorOnPrimary">#000000</item></style></resources>' > app/src/main/res/values/themes.xml
-
-          echo '<?xml version="1.0" encoding="utf-8"?>
-          <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent">
-              <LinearLayout
-                  android:id="@+id/dynamic_container"
-                  android:layout_width="match_parent"
-                  android:layout_height="match_parent"
-                  android:orientation="vertical">
-                  <Button
-                      android:id="@+id/buttonDot"
-                      android:layout_width="wrap_content"
-                      android:layout_height="wrap_content"
-                      android:text="." />
-              </LinearLayout>
-          </RelativeLayout>' > app/src/main/res/layout/activity_main.xml
-
-          if [ -f app/src/main/java/com/system/pro/MainActivity.java ]; then
-            grep -o "R.id.[a-zA-Z0-9_]*" app/src/main/java/com/system/pro/MainActivity.java | sed 's/R.id.//' | sort -u | while read -r id; do
-              if ! grep -q "android:id=\"@+id/$id\"" app/src/main/res/layout/activity_main.xml; then
-                sed -i "/<\/LinearLayout>/i <View android:id=\"@+id/$id\" android:layout_width=\"match_parent\" android:layout_height=\"wrap_content\" \/>" app/src/main/res/layout/activity_main.xml
-              fi
-            done
-          fi
-
-      - name: Clean Cache Before Execution
-        run: ./gradlew clean
-
-      - name: Extract Code Matrix Payload
-        run: |
-          echo "Build Timestamp: $(date +'%Y-%m-%d %H:%M:%S PKT')"
-          echo "Processing payload..."
-
-      - name: Dynamically Inject Package and Code Matrix
-        run: |
-          echo "Injecting code changes..."
-
-      - name: Compile Premium Application Build
-        run: ./gradlew assembleDebug
-
-      - name: Upload Finished Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: System-Pro-Premium-Build
-          path: app/build/outputs/apk/debug/app-debug.apk
+    - name: Upload Cryptographic Asset Binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: SystemPro-Release-Package
+        path: app/build/outputs/apk/debug/app-debug.apk
