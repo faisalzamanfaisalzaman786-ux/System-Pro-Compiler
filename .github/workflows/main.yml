@@ -77,12 +77,15 @@ jobs:
                   actual_code = base64.b64decode(raw_content_b64).decode('utf-8', errors='ignore')
                   final_code = sanitize_code(actual_code)
                   
-                  if target_path.endswith('.java'):
+                  file_name = os.path.basename(target_path).lower()
+                  
+                  if file_name.endswith('.java'):
                       dest_path = f'app/src/main/java/{target_env_path}/' + os.path.basename(target_path)
-                  elif target_path.endswith('.xml') and 'layout' in target_path:
-                      dest_path = 'app/src/main/res/layout/' + os.path.basename(target_path)
-                  elif target_path.endswith('.xml') and 'values' in target_path:
-                      dest_path = 'app/src/main/res/values/' + os.path.basename(target_path)
+                  elif file_name.endswith('.xml'):
+                      if 'color' in file_name or 'string' in file_name or 'style' in file_name or 'dimen' in file_name or 'attr' in file_name:
+                          dest_path = 'app/src/main/res/values/' + os.path.basename(target_path)
+                      else:
+                          dest_path = 'app/src/main/res/layout/' + os.path.basename(target_path)
                   else:
                       continue
                       
