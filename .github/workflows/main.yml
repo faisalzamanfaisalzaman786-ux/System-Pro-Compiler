@@ -65,6 +65,8 @@ jobs:
           if [ -d extracted_payload/res ]; then
             cp -r extracted_payload/res/* app/src/main/res/ || true
           fi
+          
+          find "app/src/main/java/$PKG_PATH" -name "*.java" -exec sed -i "s/^package .*/package ${{ env.TARGET_PACKAGE }};/g" {} \;
 
       - name: Build Application Package
         run: |
