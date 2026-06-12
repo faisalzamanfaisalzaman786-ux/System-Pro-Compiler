@@ -54,9 +54,14 @@ jobs:
 
       - name: Map Code Infrastructure
         run: |
+          rm -rf app/src/main/java/*
+          PKG_PATH=$(echo "${{ env.TARGET_PACKAGE }}" | tr '.' '/')
+          mkdir -p "app/src/main/java/$PKG_PATH"
+          
           if [ -d extracted_payload/java ]; then
-            cp -r extracted_payload/java/* app/src/main/java/ || true
+            find extracted_payload/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
           fi
+          
           if [ -d extracted_payload/res ]; then
             cp -r extracted_payload/res/* app/src/main/res/ || true
           fi
