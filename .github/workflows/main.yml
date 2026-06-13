@@ -129,7 +129,7 @@ jobs:
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           export GRADLE_OPTS="-Dorg.gradle.internal.launcher.welcomeMessageDisplayed=false"
-          ./gradlew assembleDebug --no-daemon 2> output_report/gradle_err.log
+          ./gradlew assembleDebug --no-daemon
 
       - name: Archive Digital Artifacts
         if: success()
@@ -144,5 +144,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Diagnostic-Crash-Report
-          path: output_report/
+          path: app/build/reports/problems/
           retention-days: 3
