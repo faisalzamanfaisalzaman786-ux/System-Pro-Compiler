@@ -41,6 +41,7 @@ jobs:
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/xml
           mkdir -p app/src/main/res/mipmap-hdpi
           mkdir -p app/src/main/res/mipmap-xhdpi
           mkdir -p app/src/main/res/mipmap-xxhdpi
@@ -54,6 +55,8 @@ jobs:
           echo -e '<?xml version="1.0" encoding="utf-8"?>\n<shape xmlns:android="http://schemas.android.com/apk/res/android">\n    <solid android:color="#39FF14"/>\n    <corners android:radius="30dp"/>\n</shape>' > app/src/main/res/drawable/round_button_green.xml
           
           echo -e '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <style name="Theme.AppCompat.NoActionBar" parent="Theme.MaterialComponents.DayNight.NoActionBar">\n        <item name="windowNoTitle">true</item>\n        <item name="windowActionBar">false</item>\n        <item name="colorPrimary">@color/neon_cyan</item>\n        <item name="colorPrimaryDark">@color/bg_premium_dark</item>\n        <item name="colorAccent">@color/neon_pink</item>\n    </style>\n</resources>' > app/src/main/res/values/themes.xml
+
+          echo -e '<?xml version="1.0" encoding="utf-8"?>\n<network-security-config>\n    <base-config cleartextTrafficPermitted="true">\n        <trust-anchors>\n            <certificates src="system" />\n        </trust-anchors>\n    </base-config>\n</network-security-config>' > app/src/main/res/xml/network_security_config.xml
 
           if [ -f extracted_payload/app_icon.png ]; then
             cp -f extracted_payload/app_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
@@ -109,7 +112,7 @@ jobs:
           
           echo '<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android" 
-              xmlns:tools="http://tools.android.com/repository/v1">
+              xmlns:tools="http://schemas.android.com/tools">
               
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -137,6 +140,7 @@ jobs:
                   android:roundIcon="@mipmap/ic_launcher_round" 
                   android:theme="@style/Theme.AppCompat.NoActionBar" 
                   android:usesCleartextTraffic="true"
+                  android:networkSecurityConfig="@xml/network_security_config"
                   android:hardwareAccelerated="true"
                   tools:replace="android:theme,android:label,android:usesCleartextTraffic">
                   
