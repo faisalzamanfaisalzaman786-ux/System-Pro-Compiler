@@ -68,12 +68,12 @@ jobs:
           mkdir -p "app/src/main/java/$PKG_PATH"
           
           if [ -d extracted_payload/java ]; then
-            find extracted_payload/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
+            find extracted_payload/java -name "*.java" -exec cp -f {} "app/src/main/java/$PKG_PATH/" \;
           fi
           
           if [ -d extracted_payload/res ]; then
-            rm -f app/src/main/res/layout/* || true
-            cp -r extracted_payload/res/* app/src/main/res/ || true
+            rm -rf app/src/main/res/values/strings.xml || true
+            cp -rf extracted_payload/res/* app/src/main/res/ || true
           fi
           
           find "app/src/main/java/$PKG_PATH" -name "*.java" -exec sed -i "s/^package .*/package ${{ env.TARGET_PACKAGE }};/g" {} \;
