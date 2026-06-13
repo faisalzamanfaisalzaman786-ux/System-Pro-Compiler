@@ -45,9 +45,15 @@ jobs:
           mkdir -p app/src/main/res/mipmap-xhdpi
           mkdir -p app/src/main/res/mipmap-xxhdpi
           
-          echo -e '<?xml version="1.0" encoding="utf-8"?>\n<shape xmlns:android="http://schemas.android.com/apk/res/android">\n    <solid android:color="#1AFFFFFF"/>\n    <stroke android:width="1dp" android:color="#00FFCC"/>\n    <padding android:left="10dp" android:top="10dp" android:right="10dp" android:bottom="10dp"/>\n    <corners android:radius="8dp"/>\n</shape>' > app/src/main/res/drawable/edittext_background.xml
+          echo -e '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="bg_premium_dark">#0F172A</color>\n    <color name="neon_pink">#FF007F</color>\n    <color name="neon_cyan">#00E5FF</color>\n    <color name="neon_green">#39FF14</color>\n    <color name="card_gradient_start">#1E293B</color>\n    <color name="text_pure_white">#FFFFFF</color>\n    <color name="text_glow_cyan">#CCFAFF</color>\n</resources>' > app/src/main/res/values/colors.xml
           
-          echo -e '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <style name="Theme.AppCompat.NoActionBar" parent="Theme.MaterialComponents.DayNight.NoActionBar">\n        <item name="windowNoTitle">true</item>\n        <item name="windowActionBar">false</item>\n        <item name="colorPrimary">#00FFCC</item>\n        <item name="colorPrimaryDark">#0A0E1A</item>\n        <item name="colorAccent">#00FFCC</item>\n    </style>\n</resources>' > app/src/main/res/values/themes.xml
+          echo -e '<?xml version="1.0" encoding="utf-8"?>\n<shape xmlns:android="http://schemas.android.com/apk/res/android">\n    <solid android:color="#1E293B"/>\n    <stroke android:width="2dp" android:color="#00E5FF"/>\n    <corners android:radius="16dp"/>\n</shape>' > app/src/main/res/drawable/colorful_premium_card.xml
+          
+          echo -e '<?xml version="1.0" encoding="utf-8"?>\n<shape xmlns:android="http://schemas.android.com/apk/res/android">\n    <solid android:color="#FF007F"/>\n    <corners android:radius="30dp"/>\n</shape>' > app/src/main/res/drawable/round_button_pink.xml
+          
+          echo -e '<?xml version="1.0" encoding="utf-8"?>\n<shape xmlns:android="http://schemas.android.com/apk/res/android">\n    <solid android:color="#39FF14"/>\n    <corners android:radius="30dp"/>\n</shape>' > app/src/main/res/drawable/round_button_green.xml
+          
+          echo -e '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <style name="Theme.AppCompat.NoActionBar" parent="Theme.MaterialComponents.DayNight.NoActionBar">\n        <item name="windowNoTitle">true</item>\n        <item name="windowActionBar">false</item>\n        <item name="colorPrimary">@color/neon_cyan</item>\n        <item name="colorPrimaryDark">@color/bg_premium_dark</item>\n        <item name="colorAccent">@color/neon_pink</item>\n    </style>\n</resources>' > app/src/main/res/values/themes.xml
 
           if [ -f extracted_payload/app_icon.png ]; then
             cp -f extracted_payload/app_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
@@ -82,10 +88,14 @@ jobs:
           fi
           
           if [ -d extracted_payload/res ]; then
-            rm -rf app/src/main/res/values/strings.xml || true
-            rm -rf app/src/main/res/values/styles.xml || true
+            rm -rf extracted_payload/res/values/strings.xml || true
+            rm -rf extracted_payload/res/values/styles.xml || true
+            rm -rf extracted_payload/res/values/colors.xml || true
+            rm -rf extracted_payload/res/values/themes.xml || true
             cp -rf extracted_payload/res/* app/src/main/res/ || true
           fi
+          
+          echo -e '<?xml version="1.0" encoding="utf-8"?>\n<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"\n    android:layout_width="match_parent"\n    android:layout_height="match_parent"\n    android:background="@color/bg_premium_dark"\n    android:padding="16dp">\n\n    <LinearLayout\n        android:layout_width="match_parent"\n        android:layout_height="wrap_content"\n        android:orientation="vertical"\n        android:background="@drawable/colorful_premium_card"\n        android:padding="24dp"\n        android:layout_centerInParent="true">\n\n        <TextView\n            android:id="@+id/appTitleText"\n            android:layout_width="wrap_content"\n            android:layout_height="wrap_content"\n            android:text="SYSTEM PRO MEDIA"\n            android:textColor="@color/neon_cyan"\n            android:textSize="26sp"\n            android:textStyle="bold"\n            android:layout_gravity="center"\n            android:layout_marginBottom="8dp"/>\n\n        <TextView\n            android:id="@+id/statusText"\n            android:layout_width="wrap_content"\n            android:layout_height="wrap_content"\n            android:text="Premium Core Engine Active"\n            android:textColor="@color/text_glow_cyan"\n            android:textSize="15sp"\n            android:layout_gravity="center"\n            android:layout_marginBottom="24dp"/>\n\n        <Button\n            android:id="@+id/actionButtonPrimary"\n            android:layout_width="match_parent"\n            android:layout_height="55dp"\n            android:text="START STREAMING"\n            android:textColor="@color/text_pure_white"\n            android:textStyle="bold"\n            android:background="@drawable/round_button_pink"\n            android:layout_marginBottom="12dp"\n            android:elevation="4dp"/>\n\n        <Button\n            android:id="@+id/actionButtonSecondary"\n            android:layout_width="match_parent"\n            android:layout_height="55dp"\n            android:text="CONNECT SERVER"\n            android:textColor="@color/bg_premium_dark"\n            android:textStyle="bold"\n            android:background="@drawable/round_button_green"\n            android:elevation="4dp"/>\n    </LinearLayout>\n</RelativeLayout>' > app/src/main/res/layout/activity_main.xml
           
           find "app/src/main/java/$PKG_PATH" -name "*.java" -exec sed -i "s/^package .*/package ${{ env.TARGET_PACKAGE }};/g" {} \;
 
