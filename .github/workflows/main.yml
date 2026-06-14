@@ -36,28 +36,52 @@ jobs:
           base64 -d payload_b64.txt > payload.zip
           unzip -o payload.zip -d extracted_payload/ || true
 
-      - name: Core Environment Setup
+      - name: Setup Android Project Structure
         run: |
-          mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/xml
           mkdir -p app/src/main/res/mipmap-hdpi
           mkdir -p app/src/main/res/mipmap-xhdpi
           mkdir -p app/src/main/res/mipmap-xxhdpi
-          
-          echo -e '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="bg_premium_dark">#0F172A</color>\n    <color name="neon_pink">#FF007F</color>\n    <color name="neon_cyan">#00E5FF</color>\n    <color name="neon_green">#39FF14</color>\n    <color name="card_gradient_start">#1E293B</color>\n    <color name="text_pure_white">#FFFFFF</color>\n    <color name="text_glow_cyan">#CCFAFF</color>\n</resources>' > app/src/main/res/values/colors.xml
-          
-          echo -e '<?xml version="1.0" encoding="utf-8"?>\n<shape xmlns:android="http://schemas.android.com/apk/res/android">\n    <solid android:color="#1E293B"/>\n    <stroke android:width="2dp" android:color="#00E5FF"/>\n    <corners android:radius="16dp"/>\n</shape>' > app/src/main/res/drawable/colorful_premium_card.xml
-          
-          echo -e '<?xml version="1.0" encoding="utf-8"?>\n<shape xmlns:android="http://schemas.android.com/apk/res/android">\n    <solid android:color="#FF007F"/>\n    <corners android:radius="30dp"/>\n</shape>' > app/src/main/res/drawable/round_button_pink.xml
-          
-          echo -e '<?xml version="1.0" encoding="utf-8"?>\n<shape xmlns:android="http://schemas.android.com/apk/res/android">\n    <solid android:color="#39FF14"/>\n    <corners android:radius="30dp"/>\n</shape>' > app/src/main/res/drawable/round_button_green.xml
-          
-          echo -e '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <style name="Theme.AppCompat.NoActionBar" parent="Theme.MaterialComponents.DayNight.NoActionBar">\n        <item name="windowNoTitle">true</item>\n        <item name="windowActionBar">false</item>\n        <item name="colorPrimary">@color/neon_cyan</item>\n        <item name="colorPrimaryDark">@color/bg_premium_dark</item>\n        <item name="colorAccent">@color/neon_pink</item>\n    </style>\n</resources>' > app/src/main/res/values/themes.xml
+          mkdir -p app/src/main/res/drawable
 
-          echo -e '<?xml version="1.0" encoding="utf-8"?>\n<network-security-config>\n    <base-config cleartextTrafficPermitted="true">\n        <trust-anchors>\n            <certificates src="system" />\n        </trust-anchors>\n    </base-config>\n</network-security-config>' > app/src/main/res/xml/network_security_config.xml
+      - name: Copy User Resources (No Overwrite)
+        run: |
+          # Copy layout files from user payload
+          if [ -d extracted_payload/res/layout ]; then
+            cp -rf extracted_payload/res/layout/* app/src/main/res/layout/ 2>/dev/null || true
+          fi
+          
+          # Copy drawable files from user payload
+          if [ -d extracted_payload/res/drawable ]; then
+            cp -rf extracted_payload/res/drawable/* app/src/main/res/drawable/ 2>/dev/null || true
+          fi
+          
+          # Copy values files from user payload
+          if [ -d extracted_payload/res/values ]; then
+            cp -rf extracted_payload/res/values/* app/src/main/res/values/ 2>/dev/null || true
+          fi
 
+      - name: Create Default Resources (Only if Missing)
+        run: |
+          # Only create themes.xml if user didn't provide one
+          if [ ! -f app/src/main/res/values/themes.xml ]; then
+            echo -e '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <style name="Theme.AppCompat.NoActionBar" parent="Theme.MaterialComponents.DayNight.NoActionBar">\n        <item name="windowNoTitle">true</item>\n        <item name="windowActionBar">false</item>\n    </style>\n</resources>' > app/src/main/res/values/themes.xml
+          fi
+          
+          # Only create colors.xml if user didn't provide one
+          if [ ! -f app/src/main/res/values/colors.xml ]; then
+            echo -e '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="black">#000000</color>\n    <color name="white">#FFFFFF</color>\n</resources>' > app/src/main/res/values/colors.xml
+          fi
+          
+          # Only create network_security_config if user didn't provide one
+          if [ ! -f app/src/main/res/xml/network_security_config.xml ]; then
+            echo -e '<?xml version="1.0" encoding="utf-8"?>\n<network-security-config>\n    <base-config cleartextTrafficPermitted="true">\n        <trust-anchors>\n            <certificates src="system" />\n        </trust-anchors>\n    </base-config>\n</network-security-config>' > app/src/main/res/xml/network_security_config.xml
+          fi
+
+      - name: Copy App Icon
+        run: |
           if [ -f extracted_payload/app_icon.png ]; then
             cp -f extracted_payload/app_icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
             cp -f extracted_payload/app_icon.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
@@ -66,7 +90,8 @@ jobs:
             cp -f extracted_payload/app_icon.png app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
             cp -f extracted_payload/app_icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
           else
-            curl -s -o app/src/main/res/mipmap-hdpi/ic_launcher.png https://raw.githubusercontent.com/actions/automating-with-github-actions/master/shared/workflow-run.png || touch app/src/main/res/mipmap-hdpi/ic_launcher.png
+            # Create a simple default icon if none provided
+            echo 'iVBORw0KGgoAAAANSUhEUgAAAEgAAABICAYAAABV7bNHAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAZdEVYdFNvZnR3YXJlAHBhaW50Lm5ldCA0LjAuMTM0A1t6AAAAIElEQVR4Xu3BAQ0AAADCoPdPbQ8HFAAAAAAAAAAAAAAA8GYhUAABcE0iPQAAAABJRU5ErkJggg==' | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
             cp -f app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
             cp -f app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
             cp -f app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png
@@ -74,14 +99,17 @@ jobs:
             cp -f app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
           fi
 
-          echo -e 'plugins {\n    id "com.android.application"\n}\nandroid {\n    namespace "'"${{ env.TARGET_PACKAGE }}"'"\n    compileSdk 34\n    defaultConfig {\n        applicationId "'"${{ env.TARGET_PACKAGE }}"'"\n        minSdk 24\n        targetSdk 34\n        versionCode 1\n        versionName "1.0"\n    }\n    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_17\n        targetCompatibility JavaVersion.VERSION_17\n    }\n    buildFeatures {\n        viewBinding false\n    }\n}\ndependencies {\n    implementation "androidx.appcompat:appcompat:1.6.1"\n    implementation "com.google.android.material:material:1.11.0"\n    implementation "androidx.constraintlayout:constraintlayout:2.1.4"\n    implementation "androidx.cardview:cardview:1.0.0"\n    implementation "androidx.recyclerview:recyclerview:1.3.2"\n}' > app/build.gradle
+      - name: Generate Build Configuration
+        run: |
+          echo -e 'plugins {\n    id "com.android.application"\n}\nandroid {\n    namespace "'"${{ env.TARGET_PACKAGE }}"'"\n    compileSdk 34\n    defaultConfig {\n        applicationId "'"${{ env.TARGET_PACKAGE }}"'"\n        minSdk 21\n        targetSdk 34\n        versionCode 1\n        versionName "1.0"\n    }\n    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_17\n        targetCompatibility JavaVersion.VERSION_17\n    }\n}\ndependencies {\n    implementation "androidx.appcompat:appcompat:1.6.1"\n    implementation "com.google.android.material:material:1.11.0"\n    implementation "androidx.constraintlayout:constraintlayout:2.1.4"\n}' > app/build.gradle
 
-      - name: Map Code Infrastructure
+      - name: Map Java Code
         run: |
           rm -rf app/src/main/java/*
           PKG_PATH=$(echo "${{ env.TARGET_PACKAGE }}" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH"
           
+          # Copy Java files from payload
           if [ -d extracted_payload/java ]; then
             find extracted_payload/java -name "*.java" -exec cp -f {} "app/src/main/java/$PKG_PATH/" \;
           elif [ -d extracted_payload/app/src/main/java ]; then
@@ -90,61 +118,33 @@ jobs:
             find extracted_payload -name "*.java" -exec cp -f {} "app/src/main/java/$PKG_PATH/" \;
           fi
           
-          if [ -d extracted_payload/res ]; then
-            rm -rf extracted_payload/res/values/strings.xml || true
-            rm -rf extracted_payload/res/values/styles.xml || true
-            rm -rf extracted_payload/res/values/colors.xml || true
-            rm -rf extracted_payload/res/values/themes.xml || true
-            cp -rf extracted_payload/res/* app/src/main/res/ || true
-          fi
-          
-          rm -f app/src/main/res/values/styles.xml || true
-          
-          echo -e '<?xml version="1.0" encoding="utf-8"?>\n<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"\n    android:id="@+id/main"\n    android:layout_width="match_parent"\n    android:layout_height="match_parent"\n    android:background="@color/bg_premium_dark"\n    android:padding="12dp">\n\n    <LinearLayout\n        android:layout_width="match_parent"\n        android:layout_height="match_parent"\n        android:orientation="vertical">\n\n        <FrameLayout\n            android:layout_width="match_parent"\n            android:layout_height="220dp"\n            android:background="#000000"\n            android:layout_marginBottom="12dp">\n            <WebView\n                android:id="@+id/liveVideoView"\n                android:layout_width="match_parent"\n                android:layout_height="match_parent"\n                android:layout_gravity="center"/>\n            <ProgressBar\n                android:id="@+id/videoProgressBar"\n                android:layout_width="wrap_content"\n                android:layout_height="wrap_content"\n                android:layout_gravity="center"\n                android:visibility="visible"/>\n        </FrameLayout>\n\n        <ScrollView\n            android:layout_width="match_parent"\n            android:layout_height="match_parent">\n            <LinearLayout\n                android:layout_width="match_parent"\n                android:layout_height="wrap_content"\n                android:orientation="vertical"\n                android:background="@drawable/colorful_premium_card"\n                android:padding="16dp">\n\n                <TextView\n                    android:id="@+id/appTitleText"\n                    android:layout_width="wrap_content"\n                    android:layout_height="wrap_content"\n                    android:text="SYSTEM PRO TV"\n                    android:textColor="@color/neon_cyan"\n                    android:textSize="22sp"\n                    android:textStyle="bold"\n                    android:layout_gravity="center"\n                    android:layout_marginBottom="16dp"/>\n\n                <com.google.android.material.button.MaterialButton\n                    android:id="@+id/btnPtvSports"\n                    android:layout_width="match_parent"\n                    android:layout_height="52dp"\n                    android:text="PTV SPORTS"\n                    android:textColor="@color/text_pure_white"\n                    android:textStyle="bold"\n                    android:backgroundTint="@color/neon_pink"\n                    android:layout_marginBottom="10dp"/>\n\n                <com.google.android.material.button.MaterialButton\n                    android:id="@+id/btnHumNews"\n                    android:layout_width="match_parent"\n                    android:layout_height="52dp"\n                    android:text="HUM NEWS"\n                    android:textColor="@color/bg_premium_dark"\n                    android:textStyle="bold"\n                    android:backgroundTint="@color/neon_green"\n                    android:layout_marginBottom="10dp"/>\n\n                <com.google.android.material.button.MaterialButton\n                    android:id="@+id/btnDiscovery"\n                    android:layout_width="match_parent"\n                    android:layout_height="52dp"\n                    android:text="DISCOVERY CHANNEL"\n                    android:textColor="@color/text_pure_white"\n                    android:textStyle="bold"\n                    android:backgroundTint="@color/neon_pink"\n                    android:layout_marginBottom="10dp"/>\n\n                <com.google.android.material.button.MaterialButton\n                    android:id="@+id/btnExpressNews"\n                    android:layout_width="match_parent"\n                    android:layout_height="52dp"\n                    android:text="EXPRESS NEWS"\n                    android:textColor="@color/bg_premium_dark"\n                    android:textStyle="bold"\n                    android:backgroundTint="@color/neon_green"\n                    android:layout_marginBottom="10dp"/>\n            </LinearLayout>\n        </ScrollView>\n    </LinearLayout>\n</RelativeLayout>' > app/src/main/res/layout/activity_main.xml
-          
-          find "app/src/main/java/$PKG_PATH" -name "*.java" -exec sed -i "s/public boolean boolean/public boolean/g" {} \;
+          # Update package name in all Java files
           find "app/src/main/java/$PKG_PATH" -name "*.java" -exec sed -i "s/^package .*/package ${{ env.TARGET_PACKAGE }};/g" {} \;
 
-      - name: Generate Shield Manifest
+      - name: Generate Android Manifest
         run: |
           mkdir -p app/src/main
           rm -f app/src/main/AndroidManifest.xml || true
           
           echo '<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android" 
-              xmlns:tools="http://schemas.android.com/tools">
+              xmlns:tools="http://schemas.android.com/tools"
+              package="${{ env.TARGET_PACKAGE }}">
               
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-              <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-              <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
-              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
-              <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" />
-              <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-              <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
-              <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
-              <uses-permission android:name="android.permission.CAMERA" />
-              <uses-permission android:name="android.permission.RECORD_AUDIO" />
-              <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-              <uses-permission android:name="android.permission.WAKE_LOCK" />
-              <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
               <application 
                   android:allowBackup="true" 
-                  android:label="${APP_NAME}" 
+                  android:label="${{ env.APP_NAME }}" 
                   android:icon="@mipmap/ic_launcher" 
                   android:roundIcon="@mipmap/ic_launcher_round" 
                   android:theme="@style/Theme.AppCompat.NoActionBar" 
                   android:usesCleartextTraffic="true"
                   android:networkSecurityConfig="@xml/network_security_config"
-                  android:hardwareAccelerated="true"
                   tools:replace="android:theme,android:label,android:usesCleartextTraffic">
                   
-                  <activity android:name=".MainActivity" android:exported="true" android:configChanges="orientation|screenSize|layoutDirection">
+                  <activity android:name=".MainActivity" android:exported="true" android:configChanges="orientation|screenSize">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
@@ -152,28 +152,26 @@ jobs:
                   </activity>
               </application>
           </manifest>' > app/src/main/AndroidManifest.xml
-          
-          sed -i "s/\${APP_NAME}/${{ env.APP_NAME }}/g" app/src/main/AndroidManifest.xml
 
-      - name: Build Application Package
+      - name: Build APK
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           export GRADLE_OPTS="-Dorg.gradle.internal.launcher.welcomeMessageDisplayed=false"
           ./gradlew assembleDebug --no-daemon
 
-      - name: Archive Digital Artifacts
+      - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: SystemPro-${{ env.APP_NAME }}-Package
+          name: ${{ env.APP_NAME }}-App
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
 
-      - name: Diagnostic Log Capture
+      - name: Upload Error Logs
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: Diagnostic-Crash-Report
-          path: app/build/reports/problems/
+          name: Build-Error-Logs
+          path: app/build/reports/
           retention-days: 3
