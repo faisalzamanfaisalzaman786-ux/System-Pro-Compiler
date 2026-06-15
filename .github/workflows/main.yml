@@ -18,7 +18,7 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Setup Gradle Without Cache
+      - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
           cache-disabled: true
@@ -39,7 +39,7 @@ jobs:
           fi
           echo "TARGET_PACKAGE=${{ github.event.client_payload.package_name }}" >> $GITHUB_ENV
           echo "APP_NAME=${{ github.event.client_payload.app_name }}" >> $GITHUB_ENV
-          mkdir -p extracted_payload output_report error_logs
+          mkdir -p extracted_payload
 
       - name: Process Payload
         run: |
@@ -84,7 +84,6 @@ jobs:
             echo '<resources>' >> app/src/main/res/values/colors.xml
             echo '    <color name="black">#000000</color>' >> app/src/main/res/values/colors.xml
             echo '    <color name="white">#FFFFFF</color>' >> app/src/main/res/values/colors.xml
-            echo '    <color name="primary">#6200EE</color>' >> app/src/main/res/values/colors.xml
             echo '</resources>' >> app/src/main/res/values/colors.xml
           fi
 
@@ -115,10 +114,31 @@ jobs:
             done
           fi
 
+      - name: Create settings.gradle
+        run: |
+          echo 'pluginManagement {' > settings.gradle
+          echo '    repositories {' >> settings.gradle
+          echo '        google()' >> settings.gradle
+          echo '        mavenCentral()' >> settings.gradle
+          echo '        gradlePluginPortal()' >> settings.gradle
+          echo '    }' >> settings.gradle
+          echo '}' >> settings.gradle
+          echo '' >> settings.gradle
+          echo 'dependencyResolutionManagement {' >> settings.gradle
+          echo '    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)' >> settings.gradle
+          echo '    repositories {' >> settings.gradle
+          echo '        google()' >> settings.gradle
+          echo '        mavenCentral()' >> settings.gradle
+          echo '    }' >> settings.gradle
+          echo '}' >> settings.gradle
+          echo '' >> settings.gradle
+          echo 'rootProject.name = "MyApp"' >> settings.gradle
+          echo 'include ":app"' >> settings.gradle
+
       - name: Generate Gradle Build File
         run: |
           echo 'plugins {' > app/build.gradle
-          echo '    id "com.android.application"' >> app/build.gradle
+          echo '    id "com.android.application" version "8.2.2" apply false' >> app/build.gradle
           echo '}' >> app/build.gradle
           echo '' >> app/build.gradle
           echo 'android {' >> app/build.gradle
@@ -138,15 +158,12 @@ jobs:
           echo '        targetCompatibility JavaVersion.VERSION_17' >> app/build.gradle
           echo '    }' >> app/build.gradle
           echo '}' >> app/build.gradle
-          echo '' >> app/build.gradle
-          echo 'dependencies {' >> app/build.gradle
-          echo '    implementation "androidx.appcompat:appcompat:1.6.1"' >> app/build.gradle
-          echo '    implementation "com.google.android.material:material:1.11.0"' >> app/build.gradle
-          echo '    implementation "androidx.constraintlayout:constraintlayout:2.1.4"' >> app/build.gradle
-          echo '}' >> app/build.gradle
-          
-          echo 'rootProject.name = "MyApp"' > settings.gradle
-          echo 'include ":app"' >> settings.gradle
+
+      - name: Create build.gradle (root)
+        run: |
+          echo 'plugins {' > build.gradle
+          echo '    id "com.android.application" version "8.2.2" apply false' >> build.gradle
+          echo '}' >> build.gradle
 
       - name: Map Java Code
         run: |
@@ -188,12 +205,20 @@ jobs:
           echo '    </application>' >> app/src/main/AndroidManifest.xml
           echo '</manifest>' >> app/src/main/AndroidManifest.xml
 
+      - name: Create gradle.properties
+        run: |
+          echo 'org.gradle.jvmargs=-Xmx2048m' > gradle.properties
+          echo 'android.useAndroidX=true' >> gradle.properties
+
       - name: Build APK
         run: |
-          gradle wrapper --gradle-version 8.5 --no-daemon
-          chmod +x gradlew
+          chmod +x gradlew 2>/dev/null || true
+          if [ ! -f gradlew ]; then
+            gradle wrapper --gradle-version 8.5 --no-daemon
+            chmod +x gradlew
+          fi
           ./gradlew clean --no-daemon || true
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
         if: success()
@@ -208,5 +233,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Build-Error-Logs
-          path: app/build/reports/
+          path: |
+            app/build/reports/
+            .gradle/
           retention-days: 3
