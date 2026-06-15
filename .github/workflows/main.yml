@@ -42,8 +42,9 @@ jobs:
           base64 -d payload_b64.txt > payload.zip 2>/dev/null || { echo "Invalid base64"; exit 1; }
           unzip -o payload.zip -d extracted_payload/ || true
 
-      - name: Setup Directories
+      - name: Setup Android Project Structure
         run: |
+          mkdir -p app/src/main
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/xml
@@ -53,58 +54,84 @@ jobs:
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/java
 
-      - name: Copy User Resources
+      - name: Copy AndroidManifest from Payload
         run: |
-          [ -d extracted_payload/res/layout ] && cp -rn extracted_payload/res/layout/* app/src/main/res/layout/ 2>/dev/null || true
-          [ -d extracted_payload/res/drawable ] && cp -rn extracted_payload/res/drawable/* app/src/main/res/drawable/ 2>/dev/null || true
-          [ -d extracted_payload/res/values ] && cp -rn extracted_payload/res/values/* app/src/main/res/values/ 2>/dev/null || true
-          [ -d extracted_payload/res/xml ] && cp -rn extracted_payload/res/xml/* app/src/main/res/xml/ 2>/dev/null || true
-
-      - name: Create Default Resources (If Missing)
-        run: |
-          if [ ! -f app/src/main/res/values/themes.xml ]; then
-            echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/values/themes.xml
-            echo '<resources>' >> app/src/main/res/values/themes.xml
-            echo '    <style name="Theme.AppCompat.NoActionBar" parent="Theme.MaterialComponents.DayNight.NoActionBar">' >> app/src/main/res/values/themes.xml
-            echo '        <item name="windowNoTitle">true</item>' >> app/src/main/res/values/themes.xml
-            echo '        <item name="windowActionBar">false</item>' >> app/src/main/res/values/themes.xml
-            echo '    </style>' >> app/src/main/res/values/themes.xml
-            echo '</resources>' >> app/src/main/res/values/themes.xml
-          fi
-          if [ ! -f app/src/main/res/values/colors.xml ]; then
-            echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/values/colors.xml
-            echo '<resources>' >> app/src/main/res/values/colors.xml
-            echo '    <color name="black">#000000</color>' >> app/src/main/res/values/colors.xml
-            echo '    <color name="white">#FFFFFF</color>' >> app/src/main/res/values/colors.xml
-            echo '</resources>' >> app/src/main/res/values/colors.xml
-          fi
-          if [ ! -f app/src/main/res/xml/network_security_config.xml ]; then
-            echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/xml/network_security_config.xml
-            echo '<network-security-config>' >> app/src/main/res/xml/network_security_config.xml
-            echo '    <base-config cleartextTrafficPermitted="true">' >> app/src/main/res/xml/network_security_config.xml
-            echo '        <trust-anchors>' >> app/src/main/res/xml/network_security_config.xml
-            echo '            <certificates src="system" />' >> app/src/main/res/xml/network_security_config.xml
-            echo '        </trust-anchors>' >> app/src/main/res/xml/network_security_config.xml
-            echo '    </base-config>' >> app/src/main/res/xml/network_security_config.xml
-            echo '</network-security-config>' >> app/src/main/res/xml/network_security_config.xml
+          if [ -f extracted_payload/AndroidManifest.xml ]; then
+            cp -f extracted_payload/AndroidManifest.xml app/src/main/AndroidManifest.xml
+            echo "✓ AndroidManifest.xml copied from payload"
+          else
+            echo "ERROR: AndroidManifest.xml not found in payload"
+            exit 1
           fi
 
-      - name: Setup App Icon
+      - name: Copy Java Files from Payload
         run: |
-          if [ -f extracted_payload/app_icon.png ] && file extracted_payload/app_icon.png | grep -q PNG; then
+          JAVA_FILES=$(find extracted_payload -name "*.java" -type f)
+          if [ -z "$JAVA_FILES" ]; then
+            echo "ERROR: No Java files found in payload"
+            exit 1
+          fi
+          
+          # Get package path from manifest or use TARGET_PACKAGE
+          PKG_PATH=$(echo "${{ env.TARGET_PACKAGE }}" | tr '.' '/')
+          mkdir -p "app/src/main/java/$PKG_PATH"
+          
+          echo "$JAVA_FILES" | while read file; do
+            cp -f "$file" "app/src/main/java/$PKG_PATH/"
+            echo "Copied: $(basename $file)"
+          done
+          
+          # Update package declarations in all Java files
+          find "app/src/main/java/$PKG_PATH" -name "*.java" -type f -exec sed -i "s/^package .*;/package ${{ env.TARGET_PACKAGE }};/g" {} \;
+          echo "✓ Java files copied and package updated"
+
+      - name: Copy Layout Files from Payload
+        run: |
+          if [ -d extracted_payload/res/layout ]; then
+            cp -rf extracted_payload/res/layout/* app/src/main/res/layout/ 2>/dev/null
+            echo "✓ Layout files copied"
+          else
+            echo "WARNING: No layout files found"
+          fi
+
+      - name: Copy Resource Files from Payload
+        run: |
+          [ -d extracted_payload/res/drawable ] && cp -rf extracted_payload/res/drawable/* app/src/main/res/drawable/ 2>/dev/null
+          [ -d extracted_payload/res/values ] && cp -rf extracted_payload/res/values/* app/src/main/res/values/ 2>/dev/null
+          [ -d extracted_payload/res/xml ] && cp -rf extracted_payload/res/xml/* app/src/main/res/xml/ 2>/dev/null
+          echo "✓ Additional resources copied"
+
+      - name: Copy App Icon from Payload
+        run: |
+          if [ -f extracted_payload/app_icon.png ]; then
             for size in hdpi xhdpi xxhdpi; do
               cp -f extracted_payload/app_icon.png app/src/main/res/mipmap-$size/ic_launcher.png
               cp -f extracted_payload/app_icon.png app/src/main/res/mipmap-$size/ic_launcher_round.png
             done
+            echo "✓ App icon copied"
           else
-            for size in hdpi xhdpi xxhdpi; do
-              echo 'iVBORw0KGgoAAAANSUhEUgAAAEgAAABICAYAAABV7bNHAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAZdEVYdFNvZnR3YXJlAHBhaW50Lm5ldCA0LjAuMTM0A1t6AAAAIElEQVR4Xu3BAQ0AAADCoPdPbQ8HFAAAAAAAAAAAAAAA8GYhUAABcE0iPQAAAABJRU5ErkJggg==' | base64 -d > app/src/main/res/mipmap-$size/ic_launcher.png
-              cp app/src/main/res/mipmap-$size/ic_launcher.png app/src/main/res/mipmap-$size/ic_launcher_round.png
-            done
+            echo "WARNING: No app_icon.png found, using default"
           fi
 
-      - name: Create settings.gradle
+      - name: Update Package and App Name in Manifest
         run: |
+          if [ -f app/src/main/AndroidManifest.xml ]; then
+            # Update package name
+            sed -i "s/package=\".*\"/package=\"${{ env.TARGET_PACKAGE }}\"/g" app/src/main/AndroidManifest.xml
+            
+            # Update app label
+            sed -i "s/android:label=\".*\"/android:label=\"${{ env.APP_NAME }}\"/g" app/src/main/AndroidManifest.xml
+            
+            # Update applicationId in manifest if exists
+            sed -i "s/applicationId \".*\"/applicationId \"${{ env.TARGET_PACKAGE }}\"/g" app/src/main/AndroidManifest.xml
+            
+            echo "✓ Manifest updated with package: ${{ env.TARGET_PACKAGE }}"
+            echo "✓ Manifest updated with app name: ${{ env.APP_NAME }}"
+          fi
+
+      - name: Generate Gradle Build Files
+        run: |
+          # Create settings.gradle
           echo 'pluginManagement {' > settings.gradle
           echo '    repositories {' >> settings.gradle
           echo '        google()' >> settings.gradle
@@ -124,102 +151,39 @@ jobs:
           echo 'rootProject.name = "MyApp"' >> settings.gradle
           echo 'include ":app"' >> settings.gradle
 
-      - name: Generate or Use Existing Android Manifest
-        run: |
-          if [ -f system/AndroidManifest.xml ]; then
-            echo "Using manifest from system folder"
-            cp -f system/AndroidManifest.xml app/src/main/AndroidManifest.xml
-            sed -i "s/package=\".*\"/package=\"${{ env.TARGET_PACKAGE }}\"/g" app/src/main/AndroidManifest.xml
-            sed -i "s/android:label=\".*\"/android:label=\"${{ env.APP_NAME }}\"/g" app/src/main/AndroidManifest.xml
-            echo "✓ Manifest loaded from system folder"
-          else
-            echo "No manifest found, generating default..."
-            echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/AndroidManifest.xml
-            echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android"' >> app/src/main/AndroidManifest.xml
-            echo '    xmlns:tools="http://schemas.android.com/tools"' >> app/src/main/AndroidManifest.xml
-            echo '    package="${{ env.TARGET_PACKAGE }}">' >> app/src/main/AndroidManifest.xml
-            echo '' >> app/src/main/AndroidManifest.xml
-            echo '    <uses-permission android:name="android.permission.INTERNET" />' >> app/src/main/AndroidManifest.xml
-            echo '    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />' >> app/src/main/AndroidManifest.xml
-            echo '' >> app/src/main/AndroidManifest.xml
-            echo '    <application' >> app/src/main/AndroidManifest.xml
-            echo '        android:allowBackup="true"' >> app/src/main/AndroidManifest.xml
-            echo '        android:label="${{ env.APP_NAME }}"' >> app/src/main/AndroidManifest.xml
-            echo '        android:icon="@mipmap/ic_launcher"' >> app/src/main/AndroidManifest.xml
-            echo '        android:roundIcon="@mipmap/ic_launcher_round"' >> app/src/main/AndroidManifest.xml
-            echo '        android:theme="@style/Theme.AppCompat.NoActionBar"' >> app/src/main/AndroidManifest.xml
-            echo '        android:usesCleartextTraffic="true"' >> app/src/main/AndroidManifest.xml
-            echo '        android:networkSecurityConfig="@xml/network_security_config"' >> app/src/main/AndroidManifest.xml
-            echo '        tools:replace="android:theme,android:label,android:usesCleartextTraffic">' >> app/src/main/AndroidManifest.xml
-            echo '' >> app/src/main/AndroidManifest.xml
-            echo '        <activity' >> app/src/main/AndroidManifest.xml
-            echo '            android:name=".MainActivity"' >> app/src/main/AndroidManifest.xml
-            echo '            android:exported="true"' >> app/src/main/AndroidManifest.xml
-            echo '            android:configChanges="orientation|screenSize|keyboardHidden">' >> app/src/main/AndroidManifest.xml
-            echo '            <intent-filter>' >> app/src/main/AndroidManifest.xml
-            echo '                <action android:name="android.intent.action.MAIN" />' >> app/src/main/AndroidManifest.xml
-            echo '                <category android:name="android.intent.category.LAUNCHER" />' >> app/src/main/AndroidManifest.xml
-            echo '            </intent-filter>' >> app/src/main/AndroidManifest.xml
-            echo '        </activity>' >> app/src/main/AndroidManifest.xml
-            echo '    </application>' >> app/src/main/AndroidManifest.xml
-            echo '</manifest>' >> app/src/main/AndroidManifest.xml
-          fi
-
-      - name: Use Custom build.gradle (If Exists)
-        run: |
-          if [ -f system/build.gradle ]; then
-            echo "Using custom build.gradle from system folder"
-            cp -f system/build.gradle app/build.gradle
-          else
-            echo 'plugins {' > app/build.gradle
-            echo '    id "com.android.application"' >> app/build.gradle
-            echo '}' >> app/build.gradle
-            echo '' >> app/build.gradle
-            echo 'android {' >> app/build.gradle
-            echo '    namespace "'"${{ env.TARGET_PACKAGE }}"'"' >> app/build.gradle
-            echo '    compileSdk 34' >> app/build.gradle
-            echo '' >> app/build.gradle
-            echo '    defaultConfig {' >> app/build.gradle
-            echo '        applicationId "'"${{ env.TARGET_PACKAGE }}"'"' >> app/build.gradle
-            echo '        minSdk 21' >> app/build.gradle
-            echo '        targetSdk 34' >> app/build.gradle
-            echo '        versionCode 1' >> app/build.gradle
-            echo '        versionName "1.0"' >> app/build.gradle
-            echo '    }' >> app/build.gradle
-            echo '' >> app/build.gradle
-            echo '    compileOptions {' >> app/build.gradle
-            echo '        sourceCompatibility JavaVersion.VERSION_17' >> app/build.gradle
-            echo '        targetCompatibility JavaVersion.VERSION_17' >> app/build.gradle
-            echo '    }' >> app/build.gradle
-            echo '}' >> app/build.gradle
-            echo '' >> app/build.gradle
-            echo 'dependencies {' >> app/build.gradle
-            echo '    implementation "androidx.appcompat:appcompat:1.6.1"' >> app/build.gradle
-            echo '    implementation "com.google.android.material:material:1.11.0"' >> app/build.gradle
-            echo '    implementation "androidx.constraintlayout:constraintlayout:2.1.4"' >> app/build.gradle
-            echo '}' >> app/build.gradle
-          fi
-
-      - name: Copy Firebase Config (If Exists)
-        run: |
-          if [ -f system/google-services.json ]; then
-            cp -f system/google-services.json app/
-            echo "✓ Firebase config copied"
-          fi
-
-      - name: Create root build.gradle
-        run: |
+          # Create root build.gradle
           echo 'plugins {' > build.gradle
           echo '    id "com.android.application" version "8.2.2" apply false' >> build.gradle
           echo '}' >> build.gradle
 
-      - name: Map Java Code from Payload
-        run: |
-          rm -rf app/src/main/java/*
-          PKG_PATH=$(echo "${{ env.TARGET_PACKAGE }}" | tr '.' '/')
-          mkdir -p "app/src/main/java/$PKG_PATH"
-          find extracted_payload -name "*.java" -type f -exec cp -f {} "app/src/main/java/$PKG_PATH/" \; 2>/dev/null || true
-          find "app/src/main/java/$PKG_PATH" -name "*.java" -type f -exec sed -i "s/^package .*;/package ${{ env.TARGET_PACKAGE }};/g" {} \;
+          # Create app/build.gradle
+          echo 'plugins {' > app/build.gradle
+          echo '    id "com.android.application"' >> app/build.gradle
+          echo '}' >> app/build.gradle
+          echo '' >> app/build.gradle
+          echo 'android {' >> app/build.gradle
+          echo '    namespace "'"${{ env.TARGET_PACKAGE }}"'"' >> app/build.gradle
+          echo '    compileSdk 34' >> app/build.gradle
+          echo '' >> app/build.gradle
+          echo '    defaultConfig {' >> app/build.gradle
+          echo '        applicationId "'"${{ env.TARGET_PACKAGE }}"'"' >> app/build.gradle
+          echo '        minSdk 21' >> app/build.gradle
+          echo '        targetSdk 34' >> app/build.gradle
+          echo '        versionCode 1' >> app/build.gradle
+          echo '        versionName "1.0"' >> app/build.gradle
+          echo '    }' >> app/build.gradle
+          echo '' >> app/build.gradle
+          echo '    compileOptions {' >> app/build.gradle
+          echo '        sourceCompatibility JavaVersion.VERSION_17' >> app/build.gradle
+          echo '        targetCompatibility JavaVersion.VERSION_17' >> app/build.gradle
+          echo '    }' >> app/build.gradle
+          echo '}' >> app/build.gradle
+          echo '' >> app/build.gradle
+          echo 'dependencies {' >> app/build.gradle
+          echo '    implementation "androidx.appcompat:appcompat:1.6.1"' >> app/build.gradle
+          echo '    implementation "com.google.android.material:material:1.11.0"' >> app/build.gradle
+          echo '    implementation "androidx.constraintlayout:constraintlayout:2.1.4"' >> app/build.gradle
+          echo '}' >> app/build.gradle
 
       - name: Create gradle.properties
         run: |
@@ -240,7 +204,6 @@ jobs:
       - name: Build APK
         run: |
           chmod +x gradlew
-          chmod +x gradle/wrapper/gradle-wrapper.jar 2>/dev/null || true
           ./gradlew clean --no-daemon --stacktrace || true
           ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
@@ -257,5 +220,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Build-Error-Logs
-          path: app/build/reports/
+          path: |
+            app/build/reports/
+            extracted_payload/
           retention-days: 3
