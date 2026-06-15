@@ -20,7 +20,6 @@ jobs:
 
       - name: Setup Gradle Environment
         run: |
-          # گریڈل کا سٹرکچر خودکار طریقے سے تیار کریں
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
 
@@ -28,6 +27,11 @@ jobs:
         run: |
           echo "TARGET_PACKAGE=${{ github.event.client_payload.package_name }}" >> $GITHUB_ENV
           echo "APP_NAME=${{ github.event.client_payload.app_name }}" >> $GITHUB_ENV
+          # پچھلے بلڈ کا سارا ڈیٹا صاف کر دیں تاکہ کوئی پرانی فائل نہ بچے
+          rm -rf app/src/main/res/layout/*
+          rm -rf app/src/main/res/drawable/*
+          rm -rf app/src/main/res/values/*
+          rm -rf app/src/main/java/*
           mkdir -p extracted_payload app/src/main/res/xml app/src/main/res/layout app/src/main/res/drawable app/src/main/res/values
 
       - name: Process Payload Assets
@@ -36,13 +40,13 @@ jobs:
           base64 -d payload_b64.txt > payload.zip
           unzip -o payload.zip -d extracted_payload/ || true
 
-      - name: Copy and Validate Resources
+      - name: Sync User Resources
         run: |
           [ -d extracted_payload/res/layout ] && cp -rf extracted_payload/res/layout/* app/src/main/res/layout/ || true
           [ -d extracted_payload/res/drawable ] && cp -rf extracted_payload/res/drawable/* app/src/main/res/drawable/ || true
           [ -d extracted_payload/res/values ] && cp -rf extracted_payload/res/values/* app/src/main/res/values/ || true
 
-      - name: Inject Safe Configuration
+      - name: Apply Safe Configuration
         run: |
           if [ -f "extracted_payload/res/xml/network_security_config.xml" ]; then
             cp -f extracted_payload/res/xml/network_security_config.xml app/src/main/res/xml/network_security_config.xml
@@ -56,10 +60,6 @@ jobs:
                 </base-config>
             </network-security-config>' > app/src/main/res/xml/network_security_config.xml
           fi
-
-      - name: Apply Android Manifest
-        run: |
-          mkdir -p app/src/main
           cp -f assets/AndroidManifest.xml app/src/main/AndroidManifest.xml
 
       - name: Generate Build Configuration
@@ -68,10 +68,11 @@ jobs:
 
       - name: Map Java Code
         run: |
-          rm -rf app/src/main/java/*
           PKG_PATH=$(echo "${{ env.TARGET_PACKAGE }}" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH"
+          # پے لوڈ سے جاوا فائلز ڈھونڈ کر کاپی کریں
           find extracted_payload -name "*.java" -exec cp -f {} "app/src/main/java/$PKG_PATH/" \;
+          # پیکیج کا نام اپ ڈیٹ کریں
           find "app/src/main/java/$PKG_PATH" -name "*.java" -exec sed -i "s/^package .*/package ${{ env.TARGET_PACKAGE }};/g" {} \;
 
       - name: Build APK
