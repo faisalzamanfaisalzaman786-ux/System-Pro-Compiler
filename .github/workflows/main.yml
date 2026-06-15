@@ -26,87 +26,35 @@ jobs:
 
       - name: Initialize Packaging Environment
         id: init
-        continue-on-error: false
         run: |
-          # Validate payload exists
           if [ -z "${{ github.event.client_payload.package_name }}" ]; then
             echo "ERROR: package_name is required"
             exit 1
           fi
-          
           if [ -z "${{ github.event.client_payload.app_name }}" ]; then
             echo "ERROR: app_name is required"
             exit 1
           fi
-          
           if [ -z "${{ github.event.client_payload.payload }}" ]; then
             echo "ERROR: payload (base64) is required"
             exit 1
           fi
-          
           echo "TARGET_PACKAGE=${{ github.event.client_payload.package_name }}" >> $GITHUB_ENV
           echo "APP_NAME=${{ github.event.client_payload.app_name }}" >> $GITHUB_ENV
-          mkdir -p extracted_payload
-          mkdir -p output_report
-          mkdir -p error_logs
-          echo "Initialization completed successfully"
+          mkdir -p extracted_payload output_report error_logs
 
       - name: Process Payload Assets
-        id: process_payload
-        continue-on-error: false
         run: |
           echo "${{ github.event.client_payload.payload }}" > payload_b64.txt
-          
-          # Validate base64
           if ! base64 -d payload_b64.txt > payload.zip 2>/dev/null; then
             echo "ERROR: Invalid base64 payload"
-            echo "Invalid base64 format" > error_logs/payload_error.txt
             exit 1
           fi
-          
-          # Check if zip is valid
           if ! unzip -t payload.zip >/dev/null 2>&1; then
             echo "ERROR: Corrupted or invalid zip file"
-            echo "Corrupted zip archive" > error_logs/payload_error.txt
             exit 1
           fi
-          
-          unzip -o payload.zip -d extracted_payload/ || {
-            echo "WARNING: Some files failed to extract, continuing..."
-          }
-          
-          echo "Payload processed successfully"
-
-      - name: Validate Android Resources
-        id: validate_resources
-        continue-on-error: false
-        run: |
-          # Check for required components
-          MISSING_COMPONENTS=""
-          
-          # Check if any Java files exist
-          JAVA_COUNT=$(find extracted_payload -name "*.java" 2>/dev/null | wc -l)
-          if [ "$JAVA_COUNT" -eq 0 ]; then
-            MISSING_COMPONENTS="$MISSING_COMPONENTS\n- No Java source files found"
-          fi
-          
-          # Check for MainActivity
-          if ! grep -r "class MainActivity" extracted_payload/ 2>/dev/null; then
-            if ! grep -r "class.*Activity" extracted_payload/ 2>/dev/null; then
-              MISSING_COMPONENTS="$MISSING_COMPONENTS\n- No Activity class found (MainActivity recommended)"
-            fi
-          fi
-          
-          # Check layout resources
-          LAYOUT_COUNT=$(find extracted_payload/res/layout -name "*.xml" 2>/dev/null | wc -l)
-          if [ "$LAYOUT_COUNT" -eq 0 ]; then
-            MISSING_COMPONENTS="$MISSING_COMPONENTS\n- No layout XML files found"
-          fi
-          
-          if [ -n "$MISSING_COMPONENTS" ]; then
-            echo "WARNING: Missing optional components:$MISSING_COMPONENTS"
-            echo "$MISSING_COMPONENTS" > error_logs/warnings.txt
-          fi
+          unzip -o payload.zip -d extracted_payload/ || true
 
       - name: Setup Android Project Structure
         run: |
@@ -118,119 +66,79 @@ jobs:
           mkdir -p app/src/main/res/mipmap-xxhdpi
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/java
-          mkdir -p app/build/outputs
 
-      - name: Copy User Resources (No Overwrite)
-        id: copy_resources
+      - name: Copy User Resources
         run: |
-          # Safely copy layout files
-          if [ -d extracted_payload/res/layout ] && [ "$(ls -A extracted_payload/res/layout 2>/dev/null)" ]; then
-            cp -rn extracted_payload/res/layout/* app/src/main/res/layout/ 2>/dev/null || echo "No layout files to copy"
-            echo "Layout files copied"
+          if [ -d extracted_payload/res/layout ]; then
+            cp -rn extracted_payload/res/layout/* app/src/main/res/layout/ 2>/dev/null || true
           fi
-          
-          # Safely copy drawable files
-          if [ -d extracted_payload/res/drawable ] && [ "$(ls -A extracted_payload/res/drawable 2>/dev/null)" ]; then
-            cp -rn extracted_payload/res/drawable/* app/src/main/res/drawable/ 2>/dev/null || echo "No drawable files to copy"
+          if [ -d extracted_payload/res/drawable ]; then
+            cp -rn extracted_payload/res/drawable/* app/src/main/res/drawable/ 2>/dev/null || true
           fi
-          
-          # Safely copy values files
-          if [ -d extracted_payload/res/values ] && [ "$(ls -A extracted_payload/res/values 2>/dev/null)" ]; then
-            cp -rn extracted_payload/res/values/* app/src/main/res/values/ 2>/dev/null || echo "No values files to copy"
+          if [ -d extracted_payload/res/values ]; then
+            cp -rn extracted_payload/res/values/* app/src/main/res/values/ 2>/dev/null || true
           fi
-          
-          # Safely copy XML config files
-          if [ -d extracted_payload/res/xml ] && [ "$(ls -A extracted_payload/res/xml 2>/dev/null)" ]; then
+          if [ -d extracted_payload/res/xml ]; then
             cp -rn extracted_payload/res/xml/* app/src/main/res/xml/ 2>/dev/null || true
           fi
 
-      - name: Create Default Resources (Only if Missing)
+      - name: Create Default Resources
         run: |
-          # themes.xml
           if [ ! -f app/src/main/res/values/themes.xml ]; then
-            cat > app/src/main/res/values/themes.xml << 'EOF'
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <style name="Theme.AppCompat.NoActionBar" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <item name="windowNoTitle">true</item>
-        <item name="windowActionBar">false</item>
-    </style>
-</resources>
-EOF
-            echo "Created default themes.xml"
+            printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' \
+              '<resources>' \
+              '    <style name="Theme.AppCompat.NoActionBar" parent="Theme.MaterialComponents.DayNight.NoActionBar">' \
+              '        <item name="windowNoTitle">true</item>' \
+              '        <item name="windowActionBar">false</item>' \
+              '    </style>' \
+              '</resources>' > app/src/main/res/values/themes.xml
           fi
-          
-          # colors.xml
           if [ ! -f app/src/main/res/values/colors.xml ]; then
-            cat > app/src/main/res/values/colors.xml << 'EOF'
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <color name="black">#000000</color>
-    <color name="white">#FFFFFF</color>
-    <color name="primary">#6200EE</color>
-</resources>
-EOF
-            echo "Created default colors.xml"
+            printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' \
+              '<resources>' \
+              '    <color name="black">#000000</color>' \
+              '    <color name="white">#FFFFFF</color>' \
+              '    <color name="primary">#6200EE</color>' \
+              '</resources>' > app/src/main/res/values/colors.xml
           fi
-          
-          # network_security_config.xml
           if [ ! -f app/src/main/res/xml/network_security_config.xml ]; then
-            cat > app/src/main/res/xml/network_security_config.xml << 'EOF'
-<?xml version="1.0" encoding="utf-8"?>
-<network-security-config>
-    <base-config cleartextTrafficPermitted="true">
-        <trust-anchors>
-            <certificates src="system" />
-        </trust-anchors>
-    </base-config>
-</network-security-config>
-EOF
-            echo "Created default network_security_config.xml"
+            printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' \
+              '<network-security-config>' \
+              '    <base-config cleartextTrafficPermitted="true">' \
+              '        <trust-anchors>' \
+              '            <certificates src="system" />' \
+              '        </trust-anchors>' \
+              '    </base-config>' \
+              '</network-security-config>' > app/src/main/res/xml/network_security_config.xml
           fi
 
       - name: Handle App Icon
         run: |
-          if [ -f extracted_payload/app_icon.png ]; then
-            # Validate it's a real PNG
-            if file extracted_payload/app_icon.png | grep -q PNG; then
-              for size in hdpi xhdpi xxhdpi; do
-                cp -f extracted_payload/app_icon.png "app/src/main/res/mipmap-$size/ic_launcher.png"
-                cp -f extracted_payload/app_icon.png "app/src/main/res/mipmap-$size/ic_launcher_round.png"
-              done
-              echo "Custom icon applied"
-            else
-              echo "WARNING: app_icon.png is not a valid PNG, using default"
-              echo "Invalid PNG format" > error_logs/icon_error.txt
-              # Use default icon
-              convert -size 96x96 xc:'#6200EE' "app/src/main/res/mipmap-hdpi/ic_launcher.png" 2>/dev/null || true
-            fi
-          else
-            # Create colored default icon
-            echo "Using default colored icon"
-            # Simple colored square as default
+          if [ -f extracted_payload/app_icon.png ] && file extracted_payload/app_icon.png | grep -q PNG; then
             for size in hdpi xhdpi xxhdpi; do
-              echo 'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAOxAAADsQBlSsOGwAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAA9SURBVGiB7cExAQAAAMKg9U9tCU+gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgLcB4PAAAQEpR6wAAAAASUVORK5CYII=' | base64 -d > "app/src/main/res/mipmap-$size/ic_launcher.png"
-              cp "app/src/main/res/mipmap-$size/ic_launcher.png" "app/src/main/res/mipmap-$size/ic_launcher_round.png"
+              cp -f extracted_payload/app_icon.png app/src/main/res/mipmap-$size/ic_launcher.png
+              cp -f extracted_payload/app_icon.png app/src/main/res/mipmap-$size/ic_launcher_round.png
+            done
+          else
+            for size in hdpi xhdpi xxhdpi; do
+              echo 'iVBORw0KGgoAAAANSUhEUgAAAEgAAABICAYAAABV7bNHAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAZdEVYdFNvZnR3YXJlAHBhaW50Lm5ldCA0LjAuMTM0A1t6AAAAIElEQVR4Xu3BAQ0AAADCoPdPbQ8HFAAAAAAAAAAAAAAA8GYhUAABcE0iPQAAAABJRU5ErkJggg==' | base64 -d > app/src/main/res/mipmap-$size/ic_launcher.png
+              cp app/src/main/res/mipmap-$size/ic_launcher.png app/src/main/res/mipmap-$size/ic_launcher_round.png
             done
           fi
 
       - name: Generate Build Configuration
-        id: gradle_config
         run: |
-          # Escape special characters in package name
-          SAFE_PACKAGE=$(echo "${{ env.TARGET_PACKAGE }}" | sed 's/[&/\]/\\&/g')
-          
-          cat > app/build.gradle << 'EOF'
+          cat > app/build.gradle << 'EOFGRADLE'
 plugins {
     id 'com.android.application'
 }
 
 android {
-    namespace 'SAFE_PACKAGE'
+    namespace 'TARGET_PACKAGE'
     compileSdk 34
     
     defaultConfig {
-        applicationId 'SAFE_PACKAGE'
+        applicationId 'TARGET_PACKAGE'
         minSdk 21
         targetSdk 34
         versionCode 1
@@ -241,11 +149,6 @@ android {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
-    
-    buildFeatures {
-        viewBinding false
-        dataBinding false
-    }
 }
 
 dependencies {
@@ -253,45 +156,22 @@ dependencies {
     implementation 'com.google.android.material:material:1.11.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
 }
-EOF
-          # Replace placeholder with actual package
-          sed -i "s/SAFE_PACKAGE/$SAFE_PACKAGE/g" app/build.gradle
-          
-          # Create settings.gradle
+EOFGRADLE
+          sed -i "s/TARGET_PACKAGE/${{ env.TARGET_PACKAGE }}/g" app/build.gradle
           echo 'rootProject.name = "MyApp"' > settings.gradle
-          echo "include :app" >> settings.gradle
+          echo 'include ":app"' >> settings.gradle
 
       - name: Map Java Code
-        id: map_java
         run: |
           rm -rf app/src/main/java/*
           PKG_PATH=$(echo "${{ env.TARGET_PACKAGE }}" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH"
-          
-          # Find and copy Java files from various possible locations
-          JAVA_FILES=$(find extracted_payload -name "*.java" -type f 2>/dev/null | head -20)
-          
-          if [ -z "$JAVA_FILES" ]; then
-            echo "ERROR: No Java files found in payload"
-            echo "No Java source files" > error_logs/java_error.txt
-            exit 1
-          fi
-          
-          echo "$JAVA_FILES" | while read file; do
-            cp -f "$file" "app/src/main/java/$PKG_PATH/" 2>/dev/null || true
-          done
-          
-          # Update package declarations
-          find "app/src/main/java/$PKG_PATH" -name "*.java" -type f | while read file; do
-            sed -i "s/^package .*;/package ${{ env.TARGET_PACKAGE }};/g" "$file"
-          done
-          
-          JAVA_COUNT=$(find "app/src/main/java/$PKG_PATH" -name "*.java" | wc -l)
-          echo "Mapped $JAVA_COUNT Java files"
+          find extracted_payload -name "*.java" -type f -exec cp -f {} "app/src/main/java/$PKG_PATH/" \; 2>/dev/null || true
+          find "app/src/main/java/$PKG_PATH" -name "*.java" -type f -exec sed -i "s/^package .*;/package ${{ env.TARGET_PACKAGE }};/g" {} \;
 
       - name: Generate Android Manifest
         run: |
-          cat > app/src/main/AndroidManifest.xml << 'EOF'
+          cat > app/src/main/AndroidManifest.xml << 'EOFM'
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
@@ -321,94 +201,29 @@ EOF
         </activity>
     </application>
 </manifest>
-EOF
+EOFM
           sed -i "s/TARGET_PACKAGE/${{ env.TARGET_PACKAGE }}/g" app/src/main/AndroidManifest.xml
           sed -i "s/APP_NAME/${{ env.APP_NAME }}/g" app/src/main/AndroidManifest.xml
 
       - name: Build APK
-        id: build_apk
-        continue-on-error: false
         run: |
-          # Generate Gradle wrapper
           gradle wrapper --gradle-version 8.5 --no-daemon
           chmod +x gradlew
-          
-          # Clean build first
           ./gradlew clean --no-daemon || true
-          
-          # Build with error capture
-          if ! ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee build_log.txt; then
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
-            # Extract compilation errors
-            grep -E "error:|FAILURE:|What went wrong:" build_log.txt > error_logs/build_errors.txt || true
-            exit 1
-          fi
-          
-          # Verify APK was created
-          if [ ! -f app/build/outputs/apk/debug/app-debug.apk ]; then
-            echo "BUILD_FAILED=true" >> $GITHUB_ENV
-            echo "APK not generated" > error_logs/build_errors.txt
-            exit 1
-          fi
-          
-          # Get APK size
-          APK_SIZE=$(du -h app/build/outputs/apk/debug/app-debug.apk | cut -f1)
-          echo "APK_SIZE=$APK_SIZE" >> $GITHUB_ENV
-          echo "APK built successfully: $APK_SIZE"
-
-      - name: Generate Build Report
-        if: always()
-        run: |
-          cat > output_report/build_report.txt << EOF
-Build Report
-============
-App Name: ${{ env.APP_NAME }}
-Package: ${{ env.TARGET_PACKAGE }}
-Status: ${{ steps.build_apk.outcome }}
-Build Time: $(date)
-APK Size: ${{ env.APK_SIZE }}
-EOF
-          
-          if [ -f error_logs/warnings.txt ]; then
-            echo -e "\nWarnings:\n$(cat error_logs/warnings.txt)" >> output_report/build_report.txt
-          fi
-          
-          if [ -f error_logs/build_errors.txt ]; then
-            echo -e "\nErrors:\n$(cat error_logs/build_errors.txt)" >> output_report/build_report.txt
-          fi
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
-        if: success() && !cancelled()
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.APP_NAME }}-App-${{ github.run_id }}
+          name: ${{ env.APP_NAME }}-App
           path: app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 7
-          compression-level: 0
-
-      - name: Upload Build Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Build-Report-${{ github.run_id }}
-          path: output_report/
           retention-days: 7
 
       - name: Upload Error Logs
-        if: failure() || cancelled()
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: Error-Logs-${{ github.run_id }}
-          path: |
-            error_logs/
-            build_log.txt
-          retention-days: 7
-
-      - name: Cleanup Workspace
-        if: always()
-        run: |
-          # Clean sensitive data
-          rm -f payload_b64.txt payload.zip
-          rm -rf extracted_payload
-          # Keep only artifacts for upload
-          echo "Workspace cleaned"
+          name: Build-Error-Logs
+          path: app/build/reports/
+          retention-days: 3
