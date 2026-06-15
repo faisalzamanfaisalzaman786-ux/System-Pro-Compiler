@@ -18,11 +18,6 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          cache-disabled: true
-
       - name: Initialize Environment
         run: |
           if [ -z "${{ github.event.client_payload.package_name }}" ]; then
@@ -138,7 +133,7 @@ jobs:
       - name: Generate Gradle Build File
         run: |
           echo 'plugins {' > app/build.gradle
-          echo '    id "com.android.application" version "8.2.2" apply false' >> app/build.gradle
+          echo '    id "com.android.application"' >> app/build.gradle
           echo '}' >> app/build.gradle
           echo '' >> app/build.gradle
           echo 'android {' >> app/build.gradle
@@ -153,13 +148,23 @@ jobs:
           echo '        versionName "1.0"' >> app/build.gradle
           echo '    }' >> app/build.gradle
           echo '' >> app/build.gradle
+          echo '    buildFeatures {' >> app/build.gradle
+          echo '        viewBinding true' >> app/build.gradle
+          echo '    }' >> app/build.gradle
+          echo '' >> app/build.gradle
           echo '    compileOptions {' >> app/build.gradle
           echo '        sourceCompatibility JavaVersion.VERSION_17' >> app/build.gradle
           echo '        targetCompatibility JavaVersion.VERSION_17' >> app/build.gradle
           echo '    }' >> app/build.gradle
           echo '}' >> app/build.gradle
+          echo '' >> app/build.gradle
+          echo 'dependencies {' >> app/build.gradle
+          echo '    implementation "androidx.appcompat:appcompat:1.6.1"' >> app/build.gradle
+          echo '    implementation "com.google.android.material:material:1.11.0"' >> app/build.gradle
+          echo '    implementation "androidx.constraintlayout:constraintlayout:2.1.4"' >> app/build.gradle
+          echo '}' >> app/build.gradle
 
-      - name: Create build.gradle (root)
+      - name: Create root build.gradle
         run: |
           echo 'plugins {' > build.gradle
           echo '    id "com.android.application" version "8.2.2" apply false' >> build.gradle
@@ -209,15 +214,36 @@ jobs:
         run: |
           echo 'org.gradle.jvmargs=-Xmx2048m' > gradle.properties
           echo 'android.useAndroidX=true' >> gradle.properties
+          echo 'android.enableJetifier=true' >> gradle.properties
+
+      - name: Setup Gradle Wrapper
+        run: |
+          # Clean any existing wrapper files
+          rm -rf gradle gradlew gradlew.bat gradle-wrapper.jar gradle-wrapper.properties 2>/dev/null || true
+          
+          # Generate fresh wrapper
+          gradle wrapper --gradle-version=8.5 --distribution-type=bin --no-daemon
+          
+          # Make gradlew executable
+          chmod +x gradlew
+          
+          # Verify wrapper jar exists
+          if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
+            echo "Gradle wrapper jar not found, downloading..."
+            mkdir -p gradle/wrapper
+            curl -L -o gradle/wrapper/gradle-wrapper.jar https://github.com/gradle/gradle/raw/v8.5.0/gradle/wrapper/gradle-wrapper.jar
+          fi
 
       - name: Build APK
         run: |
-          chmod +x gradlew 2>/dev/null || true
-          if [ ! -f gradlew ]; then
-            gradle wrapper --gradle-version 8.5 --no-daemon
-            chmod +x gradlew
-          fi
-          ./gradlew clean --no-daemon || true
+          # Make sure gradlew is executable
+          chmod +x gradlew
+          
+          # Grant execute permission
+          chmod +x gradle/wrapper/gradle-wrapper.jar 2>/dev/null || true
+          
+          # Clean and build
+          ./gradlew clean --no-daemon --stacktrace || true
           ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
@@ -235,5 +261,5 @@ jobs:
           name: Build-Error-Logs
           path: |
             app/build/reports/
-            .gradle/
+            build.log
           retention-days: 3
