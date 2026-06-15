@@ -53,14 +53,14 @@ jobs:
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/java
 
-      - name: Copy Resources
+      - name: Copy User Resources
         run: |
           [ -d extracted_payload/res/layout ] && cp -rn extracted_payload/res/layout/* app/src/main/res/layout/ 2>/dev/null || true
           [ -d extracted_payload/res/drawable ] && cp -rn extracted_payload/res/drawable/* app/src/main/res/drawable/ 2>/dev/null || true
           [ -d extracted_payload/res/values ] && cp -rn extracted_payload/res/values/* app/src/main/res/values/ 2>/dev/null || true
           [ -d extracted_payload/res/xml ] && cp -rn extracted_payload/res/xml/* app/src/main/res/xml/ 2>/dev/null || true
 
-      - name: Create Default Themes
+      - name: Create Default Resources (If Missing)
         run: |
           if [ ! -f app/src/main/res/values/themes.xml ]; then
             echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/values/themes.xml
@@ -71,9 +71,6 @@ jobs:
             echo '    </style>' >> app/src/main/res/values/themes.xml
             echo '</resources>' >> app/src/main/res/values/themes.xml
           fi
-
-      - name: Create Default Colors
-        run: |
           if [ ! -f app/src/main/res/values/colors.xml ]; then
             echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/values/colors.xml
             echo '<resources>' >> app/src/main/res/values/colors.xml
@@ -81,9 +78,6 @@ jobs:
             echo '    <color name="white">#FFFFFF</color>' >> app/src/main/res/values/colors.xml
             echo '</resources>' >> app/src/main/res/values/colors.xml
           fi
-
-      - name: Create Network Security Config
-        run: |
           if [ ! -f app/src/main/res/xml/network_security_config.xml ]; then
             echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/xml/network_security_config.xml
             echo '<network-security-config>' >> app/src/main/res/xml/network_security_config.xml
@@ -95,7 +89,7 @@ jobs:
             echo '</network-security-config>' >> app/src/main/res/xml/network_security_config.xml
           fi
 
-      - name: Setup Icon
+      - name: Setup App Icon
         run: |
           if [ -f extracted_payload/app_icon.png ] && file extracted_payload/app_icon.png | grep -q PNG; then
             for size in hdpi xhdpi xxhdpi; do
@@ -130,39 +124,88 @@ jobs:
           echo 'rootProject.name = "MyApp"' >> settings.gradle
           echo 'include ":app"' >> settings.gradle
 
-      - name: Generate Gradle Build File
+      - name: Generate or Use Existing Android Manifest
         run: |
-          echo 'plugins {' > app/build.gradle
-          echo '    id "com.android.application"' >> app/build.gradle
-          echo '}' >> app/build.gradle
-          echo '' >> app/build.gradle
-          echo 'android {' >> app/build.gradle
-          echo '    namespace "'"${{ env.TARGET_PACKAGE }}"'"' >> app/build.gradle
-          echo '    compileSdk 34' >> app/build.gradle
-          echo '' >> app/build.gradle
-          echo '    defaultConfig {' >> app/build.gradle
-          echo '        applicationId "'"${{ env.TARGET_PACKAGE }}"'"' >> app/build.gradle
-          echo '        minSdk 21' >> app/build.gradle
-          echo '        targetSdk 34' >> app/build.gradle
-          echo '        versionCode 1' >> app/build.gradle
-          echo '        versionName "1.0"' >> app/build.gradle
-          echo '    }' >> app/build.gradle
-          echo '' >> app/build.gradle
-          echo '    buildFeatures {' >> app/build.gradle
-          echo '        viewBinding true' >> app/build.gradle
-          echo '    }' >> app/build.gradle
-          echo '' >> app/build.gradle
-          echo '    compileOptions {' >> app/build.gradle
-          echo '        sourceCompatibility JavaVersion.VERSION_17' >> app/build.gradle
-          echo '        targetCompatibility JavaVersion.VERSION_17' >> app/build.gradle
-          echo '    }' >> app/build.gradle
-          echo '}' >> app/build.gradle
-          echo '' >> app/build.gradle
-          echo 'dependencies {' >> app/build.gradle
-          echo '    implementation "androidx.appcompat:appcompat:1.6.1"' >> app/build.gradle
-          echo '    implementation "com.google.android.material:material:1.11.0"' >> app/build.gradle
-          echo '    implementation "androidx.constraintlayout:constraintlayout:2.1.4"' >> app/build.gradle
-          echo '}' >> app/build.gradle
+          if [ -f system/AndroidManifest.xml ]; then
+            echo "Using manifest from system folder"
+            cp -f system/AndroidManifest.xml app/src/main/AndroidManifest.xml
+            sed -i "s/package=\".*\"/package=\"${{ env.TARGET_PACKAGE }}\"/g" app/src/main/AndroidManifest.xml
+            sed -i "s/android:label=\".*\"/android:label=\"${{ env.APP_NAME }}\"/g" app/src/main/AndroidManifest.xml
+            echo "✓ Manifest loaded from system folder"
+          else
+            echo "No manifest found, generating default..."
+            echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/AndroidManifest.xml
+            echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android"' >> app/src/main/AndroidManifest.xml
+            echo '    xmlns:tools="http://schemas.android.com/tools"' >> app/src/main/AndroidManifest.xml
+            echo '    package="${{ env.TARGET_PACKAGE }}">' >> app/src/main/AndroidManifest.xml
+            echo '' >> app/src/main/AndroidManifest.xml
+            echo '    <uses-permission android:name="android.permission.INTERNET" />' >> app/src/main/AndroidManifest.xml
+            echo '    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />' >> app/src/main/AndroidManifest.xml
+            echo '' >> app/src/main/AndroidManifest.xml
+            echo '    <application' >> app/src/main/AndroidManifest.xml
+            echo '        android:allowBackup="true"' >> app/src/main/AndroidManifest.xml
+            echo '        android:label="${{ env.APP_NAME }}"' >> app/src/main/AndroidManifest.xml
+            echo '        android:icon="@mipmap/ic_launcher"' >> app/src/main/AndroidManifest.xml
+            echo '        android:roundIcon="@mipmap/ic_launcher_round"' >> app/src/main/AndroidManifest.xml
+            echo '        android:theme="@style/Theme.AppCompat.NoActionBar"' >> app/src/main/AndroidManifest.xml
+            echo '        android:usesCleartextTraffic="true"' >> app/src/main/AndroidManifest.xml
+            echo '        android:networkSecurityConfig="@xml/network_security_config"' >> app/src/main/AndroidManifest.xml
+            echo '        tools:replace="android:theme,android:label,android:usesCleartextTraffic">' >> app/src/main/AndroidManifest.xml
+            echo '' >> app/src/main/AndroidManifest.xml
+            echo '        <activity' >> app/src/main/AndroidManifest.xml
+            echo '            android:name=".MainActivity"' >> app/src/main/AndroidManifest.xml
+            echo '            android:exported="true"' >> app/src/main/AndroidManifest.xml
+            echo '            android:configChanges="orientation|screenSize|keyboardHidden">' >> app/src/main/AndroidManifest.xml
+            echo '            <intent-filter>' >> app/src/main/AndroidManifest.xml
+            echo '                <action android:name="android.intent.action.MAIN" />' >> app/src/main/AndroidManifest.xml
+            echo '                <category android:name="android.intent.category.LAUNCHER" />' >> app/src/main/AndroidManifest.xml
+            echo '            </intent-filter>' >> app/src/main/AndroidManifest.xml
+            echo '        </activity>' >> app/src/main/AndroidManifest.xml
+            echo '    </application>' >> app/src/main/AndroidManifest.xml
+            echo '</manifest>' >> app/src/main/AndroidManifest.xml
+          fi
+
+      - name: Use Custom build.gradle (If Exists)
+        run: |
+          if [ -f system/build.gradle ]; then
+            echo "Using custom build.gradle from system folder"
+            cp -f system/build.gradle app/build.gradle
+          else
+            echo 'plugins {' > app/build.gradle
+            echo '    id "com.android.application"' >> app/build.gradle
+            echo '}' >> app/build.gradle
+            echo '' >> app/build.gradle
+            echo 'android {' >> app/build.gradle
+            echo '    namespace "'"${{ env.TARGET_PACKAGE }}"'"' >> app/build.gradle
+            echo '    compileSdk 34' >> app/build.gradle
+            echo '' >> app/build.gradle
+            echo '    defaultConfig {' >> app/build.gradle
+            echo '        applicationId "'"${{ env.TARGET_PACKAGE }}"'"' >> app/build.gradle
+            echo '        minSdk 21' >> app/build.gradle
+            echo '        targetSdk 34' >> app/build.gradle
+            echo '        versionCode 1' >> app/build.gradle
+            echo '        versionName "1.0"' >> app/build.gradle
+            echo '    }' >> app/build.gradle
+            echo '' >> app/build.gradle
+            echo '    compileOptions {' >> app/build.gradle
+            echo '        sourceCompatibility JavaVersion.VERSION_17' >> app/build.gradle
+            echo '        targetCompatibility JavaVersion.VERSION_17' >> app/build.gradle
+            echo '    }' >> app/build.gradle
+            echo '}' >> app/build.gradle
+            echo '' >> app/build.gradle
+            echo 'dependencies {' >> app/build.gradle
+            echo '    implementation "androidx.appcompat:appcompat:1.6.1"' >> app/build.gradle
+            echo '    implementation "com.google.android.material:material:1.11.0"' >> app/build.gradle
+            echo '    implementation "androidx.constraintlayout:constraintlayout:2.1.4"' >> app/build.gradle
+            echo '}' >> app/build.gradle
+          fi
+
+      - name: Copy Firebase Config (If Exists)
+        run: |
+          if [ -f system/google-services.json ]; then
+            cp -f system/google-services.json app/
+            echo "✓ Firebase config copied"
+          fi
 
       - name: Create root build.gradle
         run: |
@@ -170,45 +213,13 @@ jobs:
           echo '    id "com.android.application" version "8.2.2" apply false' >> build.gradle
           echo '}' >> build.gradle
 
-      - name: Map Java Code
+      - name: Map Java Code from Payload
         run: |
           rm -rf app/src/main/java/*
           PKG_PATH=$(echo "${{ env.TARGET_PACKAGE }}" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH"
           find extracted_payload -name "*.java" -type f -exec cp -f {} "app/src/main/java/$PKG_PATH/" \; 2>/dev/null || true
           find "app/src/main/java/$PKG_PATH" -name "*.java" -type f -exec sed -i "s/^package .*;/package ${{ env.TARGET_PACKAGE }};/g" {} \;
-
-      - name: Generate Android Manifest
-        run: |
-          echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/AndroidManifest.xml
-          echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android"' >> app/src/main/AndroidManifest.xml
-          echo '    xmlns:tools="http://schemas.android.com/tools"' >> app/src/main/AndroidManifest.xml
-          echo '    package="${{ env.TARGET_PACKAGE }}">' >> app/src/main/AndroidManifest.xml
-          echo '' >> app/src/main/AndroidManifest.xml
-          echo '    <uses-permission android:name="android.permission.INTERNET" />' >> app/src/main/AndroidManifest.xml
-          echo '    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />' >> app/src/main/AndroidManifest.xml
-          echo '' >> app/src/main/AndroidManifest.xml
-          echo '    <application' >> app/src/main/AndroidManifest.xml
-          echo '        android:allowBackup="true"' >> app/src/main/AndroidManifest.xml
-          echo '        android:label="${{ env.APP_NAME }}"' >> app/src/main/AndroidManifest.xml
-          echo '        android:icon="@mipmap/ic_launcher"' >> app/src/main/AndroidManifest.xml
-          echo '        android:roundIcon="@mipmap/ic_launcher_round"' >> app/src/main/AndroidManifest.xml
-          echo '        android:theme="@style/Theme.AppCompat.NoActionBar"' >> app/src/main/AndroidManifest.xml
-          echo '        android:usesCleartextTraffic="true"' >> app/src/main/AndroidManifest.xml
-          echo '        android:networkSecurityConfig="@xml/network_security_config"' >> app/src/main/AndroidManifest.xml
-          echo '        tools:replace="android:theme,android:label,android:usesCleartextTraffic">' >> app/src/main/AndroidManifest.xml
-          echo '' >> app/src/main/AndroidManifest.xml
-          echo '        <activity' >> app/src/main/AndroidManifest.xml
-          echo '            android:name=".MainActivity"' >> app/src/main/AndroidManifest.xml
-          echo '            android:exported="true"' >> app/src/main/AndroidManifest.xml
-          echo '            android:configChanges="orientation|screenSize|keyboardHidden">' >> app/src/main/AndroidManifest.xml
-          echo '            <intent-filter>' >> app/src/main/AndroidManifest.xml
-          echo '                <action android:name="android.intent.action.MAIN" />' >> app/src/main/AndroidManifest.xml
-          echo '                <category android:name="android.intent.category.LAUNCHER" />' >> app/src/main/AndroidManifest.xml
-          echo '            </intent-filter>' >> app/src/main/AndroidManifest.xml
-          echo '        </activity>' >> app/src/main/AndroidManifest.xml
-          echo '    </application>' >> app/src/main/AndroidManifest.xml
-          echo '</manifest>' >> app/src/main/AndroidManifest.xml
 
       - name: Create gradle.properties
         run: |
@@ -218,31 +229,18 @@ jobs:
 
       - name: Setup Gradle Wrapper
         run: |
-          # Clean any existing wrapper files
           rm -rf gradle gradlew gradlew.bat gradle-wrapper.jar gradle-wrapper.properties 2>/dev/null || true
-          
-          # Generate fresh wrapper
           gradle wrapper --gradle-version=8.5 --distribution-type=bin --no-daemon
-          
-          # Make gradlew executable
           chmod +x gradlew
-          
-          # Verify wrapper jar exists
           if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
-            echo "Gradle wrapper jar not found, downloading..."
             mkdir -p gradle/wrapper
             curl -L -o gradle/wrapper/gradle-wrapper.jar https://github.com/gradle/gradle/raw/v8.5.0/gradle/wrapper/gradle-wrapper.jar
           fi
 
       - name: Build APK
         run: |
-          # Make sure gradlew is executable
           chmod +x gradlew
-          
-          # Grant execute permission
           chmod +x gradle/wrapper/gradle-wrapper.jar 2>/dev/null || true
-          
-          # Clean and build
           ./gradlew clean --no-daemon --stacktrace || true
           ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
@@ -259,7 +257,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Build-Error-Logs
-          path: |
-            app/build/reports/
-            build.log
+          path: app/build/reports/
           retention-days: 3
