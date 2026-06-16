@@ -32,7 +32,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '11'
+          java-version: '17'       # ✅ Java 17 (Gradle 8.x کے لیے ضروری)
 
       - name: Initialize Environment
         run: |
