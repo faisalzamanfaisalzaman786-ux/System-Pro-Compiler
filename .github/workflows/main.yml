@@ -89,6 +89,11 @@ jobs:
           [ -d extracted_payload/res/drawable ] && cp -rn extracted_payload/res/drawable/* app/src/main/res/drawable/ 2>/dev/null || true
           [ -f extracted_payload/AndroidManifest.xml ] && cp extracted_payload/AndroidManifest.xml app/src/main/AndroidManifest.xml || true
 
+      - name: Fix Manifest Theme
+        run: |
+          sed -i 's/Theme.AppCompat.NoActionBar/Theme.MaterialComponents.DayNight.NoActionBar/g' app/src/main/AndroidManifest.xml
+          echo "Theme updated successfully"
+
       - name: Generate Gradle Files
         run: |
           cat <<EOF > settings.gradle
@@ -109,13 +114,13 @@ jobs:
           rootProject.name = "SystemPro"
           include ":app"
           EOF
-
+          
           cat <<EOF > build.gradle
           plugins {
               id 'com.android.application' version '8.2.2' apply false
           }
           EOF
-
+          
           cat <<EOF > app/build.gradle
           plugins {
               id 'com.android.application'
