@@ -48,10 +48,17 @@ jobs:
             echo "ERROR: No package_name provided"
             exit 1
           fi
+
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/*
           rm -rf gradle/wrapper/
-          mkdir -p extracted_payload app/src/main/res/layout app/src/main/res/values app/src/main/res/mipmap-xxxhdpi
+          mkdir -p extracted_payload app/src/main/res/layout app/src/main/res/values
+          mkdir -p app/src/main/res/mipmap-mdpi
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-xhdpi
+          mkdir -p app/src/main/res/mipmap-xxhdpi
+          mkdir -p app/src/main/res/mipmap-xxxhdpi
+
       - name: Process Payload
         run: |
           if [ -n "$PAYLOAD_DATA" ]; then
@@ -59,6 +66,7 @@ jobs:
             base64 -d payload_b64.txt > payload.zip 2>/dev/null || { echo "Invalid base64 payload"; exit 1; }
             unzip -o payload.zip -d extracted_payload/ || true
           fi
+
       - name: Create Clean Java Structure
         run: |
           PKG_PATH=$(echo "$TARGET_PACKAGE" | tr '.' '/')
@@ -75,9 +83,56 @@ jobs:
               }
           }
           EOF
+
+      - name: Handle Custom Icon
+        run: |
+          # اگر کسٹم آئیکن موجود ہے تو اسے تمام mipmap فولڈرز میں کاپی کریں
+          if [ -f extracted_payload/app_icon.png ]; then
+            echo "Custom icon found, copying to all mipmap folders..."
+            
+            # تمام mipmap فولڈرز میں کاپی کریں
+            for dir in app/src/main/res/mipmap-*/; do
+              cp extracted_payload/app_icon.png "$dir/ic_launcher.png"
+              cp extracted_payload/app_icon.png "$dir/ic_launcher_round.png"
+            done
+          else
+            echo "No custom icon found, using default Android icon"
+          fi
+
+      - name: Create AndroidManifest with Custom Icon
+        run: |
+          # اگر payload سے manifest موجود ہے تو اسے استعمال کریں، ورنہ نیا بنائیں
+          if [ -f extracted_payload/AndroidManifest.xml ]; then
+            cp extracted_payload/AndroidManifest.xml app/src/main/AndroidManifest.xml
+            
+            # manifest میں آئیکن ایٹریبیوٹ شامل کریں اگر نہیں ہے
+            if ! grep -q "android:icon" app/src/main/AndroidManifest.xml; then
+              sed -i 's|<application|<application android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round"|g' app/src/main/AndroidManifest.xml
+            fi
+          else
+            cat <<EOF > app/src/main/AndroidManifest.xml
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="$TARGET_PACKAGE">
+              <application
+                  android:icon="@mipmap/ic_launcher"
+                  android:roundIcon="@mipmap/ic_launcher_round"
+                  android:label="$APP_NAME"
+                  android:theme="@style/Theme.App">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+          fi
+
       - name: Theme and Resource Handler
         run: |
-          # سفید بیک گراؤنڈ اور سیاہ ٹیکسٹ کے لیے تھیم
           mkdir -p app/src/main/res/values
           cat <<EOF > app/src/main/res/values/themes.xml
           <resources>
@@ -89,15 +144,8 @@ jobs:
           </resources>
           EOF
           
-          # پی لوڈ سے ریسورسز کاپی کرنا
           [ -d extracted_payload/res/layout ] && cp -rn extracted_payload/res/layout/* app/src/main/res/layout/ 2>/dev/null || true
-          [ -f extracted_payload/AndroidManifest.xml ] && cp extracted_payload/AndroidManifest.xml app/src/main/AndroidManifest.xml || true
-          
-          # آئیکن ہینڈلر
-          if [ -f extracted_payload/app_icon.png ]; then
-            cp extracted_payload/app_icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-            cp extracted_payload/app_icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
-          fi
+
       - name: Generate Gradle Files
         run: |
           cat <<EOF > settings.gradle
@@ -126,11 +174,13 @@ jobs:
               implementation 'com.google.android.material:material:1.11.0'
           }
           EOF
+
       - name: Build APK
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew assembleDebug --info
+
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
