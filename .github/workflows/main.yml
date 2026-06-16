@@ -60,16 +60,17 @@ jobs:
           mkdir -p app/src/main/java
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/mipmap
+          mkdir -p app/src/main/res/drawable
           mkdir -p extracted_payload
 
-      - name: Process Payload (if any)
+      - name: Process Payload
         run: |
           if [ -n "$PAYLOAD_DATA" ]; then
             echo "$PAYLOAD_DATA" > payload_b64.txt
             base64 -d payload_b64.txt > payload.zip 2>/dev/null || true
             unzip -o payload.zip -d extracted_payload/ 2>/dev/null || true
             echo "✅ Payload processed"
+            ls -la extracted_payload/
           fi
 
       - name: Create App Files
@@ -77,7 +78,7 @@ jobs:
           PKG_PATH=$(echo "$TARGET_PACKAGE" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH"
           
-          # ✅ MainActivity
+          # ✅ MainActivity with FULL import
           cat <<EOF > "app/src/main/java/$PKG_PATH/MainActivity.java"
           package $TARGET_PACKAGE;
           
@@ -90,11 +91,16 @@ jobs:
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   setContentView(R.layout.activity_main);
+                  
+                  TextView textView = findViewById(R.id.tvHello);
+                  if (textView != null) {
+                      textView.setText("$APP_NAME");
+                  }
               }
           }
           EOF
           
-          # ✅ Layout
+          # ✅ Layout with ID
           cat <<EOF > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -104,6 +110,7 @@ jobs:
               android:orientation="vertical"
               android:background="#FFFFFF">
               <TextView
+                  android:id="@+id/tvHello"
                   android:layout_width="wrap_content"
                   android:layout_height="wrap_content"
                   android:text="$APP_NAME"
@@ -157,6 +164,7 @@ jobs:
           <resources>
               <color name="colorPrimary">#6200EE</color>
               <color name="white">#FFFFFF</color>
+              <color name="black">#000000</color>
           </resources>
           EOF
 
@@ -165,32 +173,59 @@ jobs:
           # Copy layout if exists
           if [ -f extracted_payload/res/layout/activity_main.xml ]; then
             cp extracted_payload/res/layout/activity_main.xml app/src/main/res/layout/activity_main.xml
-            echo "✅ Layout copied"
+            echo "✅ Layout copied from payload"
           fi
           
           # Copy Java files if exists
           if [ -d extracted_payload/java ]; then
             PKG_PATH=$(echo "$TARGET_PACKAGE" | tr '.' '/')
             find extracted_payload/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
-            echo "✅ Java files copied"
+            echo "✅ Java files copied from payload"
           fi
+          
+          # Copy custom icon if exists
+          if [ -f extracted_payload/app_icon.png ]; then
+            cp extracted_payload/app_icon.png app/src/main/res/drawable/ic_launcher.png
+            echo "✅ Icon copied from payload"
+          fi
+
+      - name: Show Project Structure
+        run: |
+          echo "📂 Project Structure:"
+          find app/src/main -type f | sort
+          echo ""
+          echo "📄 MainActivity.java:"
+          PKG_PATH=$(echo "$TARGET_PACKAGE" | tr '.' '/')
+          cat "app/src/main/java/$PKG_PATH/MainActivity.java"
+          echo ""
+          echo "📄 AndroidManifest.xml:"
+          cat app/src/main/AndroidManifest.xml
 
       - name: Setup Gradle
         run: |
           cat <<EOF > settings.gradle
           pluginManagement {
-              repositories { google(); mavenCentral(); gradlePluginPortal() }
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
           }
           dependencyResolutionManagement {
               repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories { google(); mavenCentral() }
+              repositories {
+                  google()
+                  mavenCentral()
+              }
           }
           rootProject.name = "SystemPro"
           include ":app"
           EOF
           
           cat <<EOF > app/build.gradle
-          plugins { id 'com.android.application' }
+          plugins {
+              id 'com.android.application'
+          }
           
           android {
               namespace '$TARGET_PACKAGE'
