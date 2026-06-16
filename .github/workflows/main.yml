@@ -1,4 +1,4 @@
-      - name: Create Build Files
+        name: Create Build Files
         run: |
           # 1. settings.gradle میں پلگ ان ریپوزٹریز کا ہونا ضروری ہے
           cat <<EOF > settings.gradle
