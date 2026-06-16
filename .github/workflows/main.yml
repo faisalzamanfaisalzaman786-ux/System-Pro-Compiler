@@ -50,12 +50,9 @@ jobs:
           fi
 
           rm -rf app/src/main/java/*
-          rm -rf app/src/main/res/layout/*
-          rm -rf app/src/main/res/values/*
-          rm -rf app/src/main/res/drawable/*
-          rm -rf app/src/main/res/xml/*
+          rm -rf app/src/main/res/*
           rm -rf gradle/wrapper/
-          mkdir -p extracted_payload app/src/main/res/layout app/src/main/res/values app/src/main/res/xml app/src/main/res/drawable
+          mkdir -p extracted_payload app/src/main/res/layout app/src/main/res/values app/src/main/res/mipmap-xxxhdpi
 
       - name: Process Payload
         run: |
@@ -82,29 +79,37 @@ jobs:
           }
           EOF
 
-      - name: Copy Resources
+      - name: Theme and Resource Handler
         run: |
+          # 1. تھیم جنریشن (ڈارک موڈ اور ٹیکسٹ کلر کے لیے)
+          cat <<EOF > app/src/main/res/values/themes.xml
+          <resources>
+              <style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+                  <item name="colorPrimary">#6200EE</item>
+                  <item name="android:textColorPrimary">#FFFFFF</item>
+                  <item name="android:windowBackground">#121212</item>
+              </style>
+          </resources>
+          EOF
+          # 2. پی لوڈ سے لے آؤٹ اور مینی فیسٹ کاپی کریں
           [ -d extracted_payload/res/layout ] && cp -rn extracted_payload/res/layout/* app/src/main/res/layout/ 2>/dev/null || true
-          [ -d extracted_payload/res/values ] && cp -rn extracted_payload/res/values/* app/src/main/res/values/ 2>/dev/null || true
-          [ -d extracted_payload/res/drawable ] && cp -rn extracted_payload/res/drawable/* app/src/main/res/drawable/ 2>/dev/null || true
           [ -f extracted_payload/AndroidManifest.xml ] && cp extracted_payload/AndroidManifest.xml app/src/main/AndroidManifest.xml || true
+          # 3. آئیکن ہینڈلر
+          if [ -f extracted_payload/app_icon.png ]; then
+            cp extracted_payload/app_icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+            cp extracted_payload/app_icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
+          fi
 
       - name: Generate Gradle Files
         run: |
           cat <<EOF > settings.gradle
-          pluginManagement {
-              repositories { google(); mavenCentral(); gradlePluginPortal() }
-          }
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement {
               repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
               repositories { google(); mavenCentral() }
           }
           rootProject.name = "SystemPro"
           include ":app"
-          EOF
-          
-          cat <<EOF > build.gradle
-          plugins { id 'com.android.application' version '8.2.2' apply false }
           EOF
           
           cat <<EOF > app/build.gradle
@@ -123,22 +128,8 @@ jobs:
               implementation 'com.google.android.material:material:1.11.0'
           }
           EOF
-          
-          mkdir -p app/src/main/res/values
-          cat <<EOF > app/src/main/res/values/themes.xml
-          <resources>
-              <style name="Theme.MaterialComponents.DayNight.NoActionBar" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-                  <item name="colorPrimary">#6200EE</item>
-                  <item name="colorPrimaryDark">#3700B3</item>
-                  <item name="colorAccent">#03DAC5</item>
-              </style>
-              <style name="Theme.AppCompat.Light.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar">
-                  <item name="colorPrimary">#6200EE</item>
-              </style>
-          </resources>
-          EOF
 
-      - name: Setup Gradle Wrapper and Build
+      - name: Build APK
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
