@@ -34,7 +34,7 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Setup Environment
+      - name: Initialize and Clean Environment
         run: |
           if [ -n "${{ github.event.client_payload.package_name }}" ]; then
             echo "TARGET_PACKAGE=${{ github.event.client_payload.package_name }}" >> $GITHUB_ENV
@@ -49,35 +49,141 @@ jobs:
             exit 1
           fi
 
-      - name: Create Build Files
-        run: |
-          mkdir -p app/src/main/java
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
+          echo "📱 Target Package: $TARGET_PACKAGE"
+          echo "📱 App Name: $APP_NAME"
 
-          cat <<EOF > settings.gradle
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
+          rm -rf app/src/main/java/*
+          rm -rf app/src/main/res/*
+          rm -rf gradle/wrapper/
+          mkdir -p extracted_payload app/src/main/res/layout app/src/main/res/values
+          mkdir -p app/src/main/res/mipmap-mdpi
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-xhdpi
+          mkdir -p app/src/main/res/mipmap-xxhdpi
+          mkdir -p app/src/main/res/mipmap-xxxhdpi
+
+      - name: Process Payload
+        run: |
+          if [ -n "$PAYLOAD_DATA" ]; then
+            echo "$PAYLOAD_DATA" > payload_b64.txt
+            base64 -d payload_b64.txt > payload.zip 2>/dev/null || { echo "Invalid base64 payload"; exit 1; }
+            unzip -o payload.zip -d extracted_payload/ || true
+            echo "✅ Payload extracted"
+          fi
+
+      - name: Create Clean Java Structure
+        run: |
+          PKG_PATH=$(echo "$TARGET_PACKAGE" | tr '.' '/')
+          mkdir -p "app/src/main/java/$PKG_PATH"
+          cat <<EOF > "app/src/main/java/$PKG_PATH/MainActivity.java"
+          package $TARGET_PACKAGE;
+          import android.os.Bundle;
+          import androidx.appcompat.app.AppCompatActivity;
+          public class MainActivity extends AppCompatActivity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setContentView(R.layout.activity_main);
               }
           }
+          EOF
+          echo "✅ MainActivity created"
+
+      - name: Handle Custom Icon
+        run: |
+          if [ -f extracted_payload/app_icon.png ]; then
+            echo "✅ Custom icon found, copying to all mipmap folders..."
+            for dir in app/src/main/res/mipmap-*/; do
+              cp extracted_payload/app_icon.png "$dir/ic_launcher.png"
+              cp extracted_payload/app_icon.png "$dir/ic_launcher_round.png"
+            done
+          else
+            echo "ℹ️ No custom icon found, using default Android icon"
+          fi
+
+      - name: Create AndroidManifest with Custom Icon and App Name Override
+        run: |
+          # اگر payload سے manifest موجود ہے تو اسے استعمال کریں
+          if [ -f extracted_payload/AndroidManifest.xml ]; then
+            cp extracted_payload/AndroidManifest.xml app/src/main/AndroidManifest.xml
+            echo "📄 Using manifest from payload"
+          else
+            # ورنہ نیا manifest بنائیں
+            cat <<EOF > app/src/main/AndroidManifest.xml
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="$TARGET_PACKAGE">
+              <application
+                  android:icon="@mipmap/ic_launcher"
+                  android:roundIcon="@mipmap/ic_launcher_round"
+                  android:label="$APP_NAME"
+                  android:theme="@style/Theme.App">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+            echo "📄 Created new manifest"
+          fi
+          
+          # 🔥 CRITICAL: Payload سے آنے والے App Name کو Manifest میں Override کریں
+          echo "🔄 Overriding app name in manifest to: $APP_NAME"
+          sed -i "s|android:label=\"[^\"]*\"|android:label=\"$APP_NAME\"|g" app/src/main/AndroidManifest.xml
+          
+          # اگر manifest میں label نہیں ہے تو add کریں
+          if ! grep -q "android:label" app/src/main/AndroidManifest.xml; then
+            sed -i "s|<application|<application android:label=\"$APP_NAME\"|g" app/src/main/AndroidManifest.xml
+          fi
+          
+          # آئیکن ایٹریبیوٹ چیک کریں
+          if ! grep -q "android:icon" app/src/main/AndroidManifest.xml; then
+            sed -i 's|<application|<application android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round"|g' app/src/main/AndroidManifest.xml
+          fi
+          
+          echo "✅ Manifest updated with app name: $APP_NAME"
+          echo "📄 Final AndroidManifest.xml:"
+          cat app/src/main/AndroidManifest.xml
+
+      - name: Theme and Resource Handler
+        run: |
+          mkdir -p app/src/main/res/values
+          cat <<EOF > app/src/main/res/values/themes.xml
+          <resources>
+              <style name="Theme.App" parent="Theme.MaterialComponents.Light.NoActionBar">
+                  <item name="colorPrimary">#6200EE</item>
+                  <item name="android:windowBackground">#FFFFFF</item>
+                  <item name="android:textColorPrimary">#000000</item>
+              </style>
+          </resources>
+          EOF
+          
+          # Update strings.xml with payload app name
+          if [ -f app/src/main/res/values/strings.xml ]; then
+            sed -i "s|<string name=\"app_name\">[^<]*</string>|<string name=\"app_name\">$APP_NAME</string>|g" app/src/main/res/values/strings.xml
+          fi
+          
+          [ -d extracted_payload/res/layout ] && cp -rn extracted_payload/res/layout/* app/src/main/res/layout/ 2>/dev/null || true
+          echo "✅ Resources configured"
+
+      - name: Generate Gradle Files
+        run: |
+          cat <<EOF > settings.gradle
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement {
               repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
+              repositories { google(); mavenCentral() }
           }
           rootProject.name = "SystemPro"
           include ":app"
           EOF
           
           cat <<EOF > app/build.gradle
-          plugins {
-              id 'com.android.application' version '8.2.2'
-          }
+          plugins { id 'com.android.application' }
           android {
               namespace '$TARGET_PACKAGE'
               compileSdk 34
@@ -85,22 +191,36 @@ jobs:
                   applicationId '$TARGET_PACKAGE'
                   minSdk 21
                   targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
               }
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
           }
           EOF
+          echo "✅ Gradle files generated"
+
+      - name: Show Final App Name
+        run: |
+          echo "=========================================="
+          echo "📱 App Name from Payload: $APP_NAME"
+          echo "📦 Package: $TARGET_PACKAGE"
+          echo "=========================================="
+          echo "✅ App name will be applied to:"
+          echo "   - AndroidManifest.xml (android:label)"
+          echo "   - strings.xml (app_name)"
+          echo "=========================================="
 
       - name: Build APK
         run: |
+          echo "🔨 Building APK with App Name: $APP_NAME"
+          gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --info
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: App-Build
+          name: ${{ env.APP_NAME }}-App
           path: app/build/outputs/apk/debug/app-debug.apk
