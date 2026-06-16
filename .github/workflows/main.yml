@@ -3,6 +3,22 @@ name: System Pro Titan Master Build
 on:
   repository_dispatch:
     types: [trigger_b64_build]
+  workflow_dispatch:
+    inputs:
+      package_name:
+        description: 'Package Name'
+        required: true
+        default: 'com.example.app'
+        type: string
+      app_name:
+        description: 'App Name'
+        required: true
+        default: 'MyApp'
+        type: string
+      payload:
+        description: 'Base64 Encoded Payload'
+        required: false
+        type: string
 
 jobs:
   build:
@@ -20,20 +36,23 @@ jobs:
 
       - name: Initialize Environment
         run: |
-          if [ -z "${{ github.event.client_payload.package_name }}" ]; then
-            echo "ERROR: package_name required"
+          # Handle both repository_dispatch and workflow_dispatch
+          if [ -n "${{ github.event.client_payload.package_name }}" ]; then
+            echo "TARGET_PACKAGE=${{ github.event.client_payload.package_name }}" >> $GITHUB_ENV
+            echo "APP_NAME=${{ github.event.client_payload.app_name }}" >> $GITHUB_ENV
+            echo "PAYLOAD_DATA=${{ github.event.client_payload.payload }}" >> $GITHUB_ENV
+          elif [ -n "${{ github.event.inputs.package_name }}" ]; then
+            echo "TARGET_PACKAGE=${{ github.event.inputs.package_name }}" >> $GITHUB_ENV
+            echo "APP_NAME=${{ github.event.inputs.app_name }}" >> $GITHUB_ENV
+            echo "PAYLOAD_DATA=${{ github.event.inputs.payload }}" >> $GITHUB_ENV
+          else
+            echo "ERROR: No package_name provided"
             exit 1
           fi
-          if [ -z "${{ github.event.client_payload.app_name }}" ]; then
-            echo "ERROR: app_name required"
-            exit 1
-          fi
-          if [ -z "${{ github.event.client_payload.payload }}" ]; then
-            echo "ERROR: payload required"
-            exit 1
-          fi
-          echo "TARGET_PACKAGE=${{ github.event.client_payload.package_name }}" >> $GITHUB_ENV
-          echo "APP_NAME=${{ github.event.client_payload.app_name }}" >> $GITHUB_ENV
+          
+          echo "Target Package: $TARGET_PACKAGE"
+          echo "App Name: $APP_NAME"
+          
           mkdir -p extracted_payload
           mkdir -p app/src/main
           mkdir -p app/src/main/res/layout
@@ -47,55 +66,66 @@ jobs:
 
       - name: Process Payload
         run: |
-          echo "${{ github.event.client_payload.payload }}" > payload_b64.txt
-          base64 -d payload_b64.txt > payload.zip 2>/dev/null || { echo "Invalid base64"; exit 1; }
-          unzip -o payload.zip -d extracted_payload/ || true
-          echo "Payload extracted successfully"
+          if [ -n "$PAYLOAD_DATA" ]; then
+            echo "$PAYLOAD_DATA" > payload_b64.txt
+            base64 -d payload_b64.txt > payload.zip 2>/dev/null || { echo "Invalid base64 payload"; exit 1; }
+            unzip -o payload.zip -d extracted_payload/ || true
+            echo "✓ Payload extracted successfully"
+          else
+            echo "⚠️ No payload provided, using existing files"
+          fi
 
       - name: Copy AndroidManifest from Payload
         run: |
           if [ -f extracted_payload/AndroidManifest.xml ]; then
             cp -f extracted_payload/AndroidManifest.xml app/src/main/AndroidManifest.xml
             echo "✓ AndroidManifest.xml copied from payload"
+          elif [ -f AndroidManifest.xml ]; then
+            cp -f AndroidManifest.xml app/src/main/AndroidManifest.xml
+            echo "✓ AndroidManifest.xml copied from repo"
           else
-            echo "ERROR: AndroidManifest.xml not found in payload"
+            echo "ERROR: AndroidManifest.xml not found"
             exit 1
           fi
 
       - name: Copy Java Files from Payload
         run: |
-          JAVA_FILES=$(find extracted_payload -name "*.java" -type f)
+          JAVA_FILES=$(find extracted_payload -name "*.java" -type f 2>/dev/null || echo "")
           if [ -z "$JAVA_FILES" ]; then
             echo "ERROR: No Java files found in payload"
             exit 1
           fi
           
-          PKG_PATH=$(echo "${{ env.TARGET_PACKAGE }}" | tr '.' '/')
+          PKG_PATH=$(echo "$TARGET_PACKAGE" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH"
           
           echo "$JAVA_FILES" | while read file; do
-            cp -f "$file" "app/src/main/java/$PKG_PATH/"
-            echo "Copied: $(basename $file)"
+            if [ -f "$file" ]; then
+              cp -f "$file" "app/src/main/java/$PKG_PATH/"
+              echo "Copied: $(basename $file)"
+            fi
           done
           echo "✓ Java files copied"
 
       - name: Smart Update Package in Java Files
         run: |
-          PKG_PATH=$(echo "${{ env.TARGET_PACKAGE }}" | tr '.' '/')
-          JAVA_FILES=$(find "app/src/main/java/$PKG_PATH" -name "*.java" -type f)
+          PKG_PATH=$(echo "$TARGET_PACKAGE" | tr '.' '/')
+          JAVA_FILES=$(find "app/src/main/java/$PKG_PATH" -name "*.java" -type f 2>/dev/null || echo "")
           
           for file in $JAVA_FILES; do
-            if grep -q "^package .*;" "$file"; then
-              CURRENT_PKG=$(grep "^package .*;" "$file" | sed 's/package \(.*\);/\\1/')
-              if [ "$CURRENT_PKG" != "${{ env.TARGET_PACKAGE }}" ]; then
-                sed -i "s/^package .*;/package ${{ env.TARGET_PACKAGE }};/g" "$file"
-                echo "✓ Updated package in: $(basename $file) ($CURRENT_PKG → ${{ env.TARGET_PACKAGE }})"
+            if [ -f "$file" ]; then
+              if grep -q "^package .*;" "$file" 2>/dev/null; then
+                CURRENT_PKG=$(grep "^package .*;" "$file" | sed 's/package \(.*\);/\\1/')
+                if [ "$CURRENT_PKG" != "$TARGET_PACKAGE" ]; then
+                  sed -i "s/^package .*;/package $TARGET_PACKAGE;/g" "$file"
+                  echo "✓ Updated package in: $(basename $file) ($CURRENT_PKG → $TARGET_PACKAGE)"
+                else
+                  echo "✓ Package already correct in: $(basename $file)"
+                fi
               else
-                echo "✓ Package already correct in: $(basename $file)"
+                echo "package $TARGET_PACKAGE;" | cat - "$file" > temp && mv temp "$file"
+                echo "✓ Added package line to: $(basename $file)"
               fi
-            else
-              echo "package ${{ env.TARGET_PACKAGE }};" | cat - "$file" > temp && mv temp "$file"
-              echo "✓ Added package line to: $(basename $file)"
             fi
           done
 
@@ -105,7 +135,7 @@ jobs:
             cp -rf extracted_payload/res/layout/* app/src/main/res/layout/ 2>/dev/null
             echo "✓ Layout files copied"
           else
-            echo "WARNING: No layout files found"
+            echo "⚠️ No layout files found"
           fi
 
       - name: Copy Resource Files from Payload
@@ -117,26 +147,30 @@ jobs:
 
       - name: Copy App Icon from Payload
         run: |
-          if [ -f extracted_payload/app_icon.png ] && file extracted_payload/app_icon.png | grep -q PNG; then
-            for size in hdpi xhdpi xxhdpi; do
-              cp -f extracted_payload/app_icon.png app/src/main/res/mipmap-$size/ic_launcher.png
-              cp -f extracted_payload/app_icon.png app/src/main/res/mipmap-$size/ic_launcher_round.png
-            done
-            echo "✓ App icon copied"
+          if [ -f extracted_payload/app_icon.png ]; then
+            if file extracted_payload/app_icon.png | grep -q PNG; then
+              for size in hdpi xhdpi xxhdpi; do
+                cp -f extracted_payload/app_icon.png app/src/main/res/mipmap-$size/ic_launcher.png
+                cp -f extracted_payload/app_icon.png app/src/main/res/mipmap-$size/ic_launcher_round.png
+              done
+              echo "✓ App icon copied"
+            else
+              echo "⚠️ Invalid PNG icon"
+            fi
           else
-            echo "WARNING: No valid app_icon.png found"
+            echo "⚠️ No app icon provided"
           fi
 
       - name: Smart Update Manifest
         run: |
           if [ -f app/src/main/AndroidManifest.xml ]; then
-            # Update app label only (package attribute is optional in modern Android)
-            sed -i "s/android:label=\"[^\"]*\"/android:label=\"${{ env.APP_NAME }}\"/g" app/src/main/AndroidManifest.xml
-            echo "✓ Updated app label to: ${{ env.APP_NAME }}"
+            # Update app label
+            sed -i "s/android:label=\"[^\"]*\"/android:label=\"$APP_NAME\"/g" app/src/main/AndroidManifest.xml
+            echo "✓ Updated app label to: $APP_NAME"
             
             # Optional: Update package attribute if it exists (don't add if not present)
             if grep -q "package=\"" app/src/main/AndroidManifest.xml; then
-              sed -i "s/package=\"[^\"]*\"/package=\"${{ env.TARGET_PACKAGE }}\"/g" app/src/main/AndroidManifest.xml
+              sed -i "s/package=\"[^\"]*\"/package=\"$TARGET_PACKAGE\"/g" app/src/main/AndroidManifest.xml
               echo "✓ Updated existing package attribute in manifest"
             else
               echo "✓ No package attribute in manifest (modern Android - OK)"
@@ -199,8 +233,8 @@ dependencies {
     implementation "androidx.constraintlayout:constraintlayout:2.1.4"
 }
 EOF
-          sed -i "s/TARGET_PACKAGE/${{ env.TARGET_PACKAGE }}/g" app/build.gradle
-          echo "✓ Gradle files generated with namespace: ${{ env.TARGET_PACKAGE }}"
+          sed -i "s/TARGET_PACKAGE/$TARGET_PACKAGE/g" app/build.gradle
+          echo "✓ Gradle files generated with namespace: $TARGET_PACKAGE"
 
       - name: Create gradle.properties
         run: |
@@ -226,12 +260,11 @@ EOF
         run: |
           chmod +x gradlew
           
-          # Deep clean to remove any cached R classes
+          # Deep clean
           echo "Performing deep clean..."
           ./gradlew clean --no-daemon --stacktrace || true
           rm -rf app/build
           rm -rf .gradle
-          rm -rf ~/.gradle/caches/transforms-* 2>/dev/null || true
           
           # Force regenerate R class
           echo "Regenerating R class..."
@@ -248,7 +281,7 @@ EOF
             echo "✅ APK built successfully! Size: $APK_SIZE"
             echo "APK_PATH=app/build/outputs/apk/debug/app-debug.apk" >> $GITHUB_ENV
           else
-            echo "❌ APK not found at expected path"
+            echo "❌ APK not found"
             ls -la app/build/outputs/apk/debug/ 2>/dev/null || echo "Build directory empty"
             exit 1
           fi
@@ -286,6 +319,6 @@ EOF
       - name: Cleanup Sensitive Data
         if: always()
         run: |
-          rm -f payload_b64.txt payload.zip
-          rm -rf extracted_payload
+          rm -f payload_b64.txt payload.zip 2>/dev/null || true
+          rm -rf extracted_payload 2>/dev/null || true
           echo "✓ Cleanup completed"
