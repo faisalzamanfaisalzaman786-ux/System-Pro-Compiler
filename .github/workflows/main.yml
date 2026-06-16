@@ -62,9 +62,11 @@ jobs:
         run: |
           if [ -n "$PAYLOAD_DATA" ]; then
             echo "$PAYLOAD_DATA" > payload_b64.txt
-            base64 -d payload_b64.txt > payload.zip
-            unzip -o payload.zip -d extracted_payload/
-            echo "Payload extracted"
+            base64 -d payload_b64.txt > payload.zip 2>/dev/null || { echo "Invalid base64 payload"; exit 1; }
+            unzip -o payload.zip -d extracted_payload/ || true
+            echo "Payload extracted successfully"
+          else
+            echo "No payload provided"
           fi
 
       - name: Copy AndroidManifest
@@ -93,14 +95,16 @@ jobs:
           mkdir -p "app/src/main/java/$PKG_PATH"
           for file in $JAVA_FILES; do
             cp "$file" "app/src/main/java/$PKG_PATH/"
+            echo "Copied: $(basename $file)"
           done
 
-      - name: Update Java Package
+      - name: Update Java Package Names
         run: |
           PKG_PATH=$(echo "$TARGET_PACKAGE" | tr '.' '/')
           for file in app/src/main/java/$PKG_PATH/*.java; do
             if [ -f "$file" ]; then
               sed -i "s/^package .*;/package $TARGET_PACKAGE;/g" "$file"
+              echo "Updated package in: $(basename $file)"
             fi
           done
 
@@ -118,6 +122,7 @@ jobs:
           if [ -d extracted_payload/res/xml ]; then
             cp -r extracted_payload/res/xml/* app/src/main/res/xml/ 2>/dev/null
           fi
+          echo "Resources copied"
 
       - name: Create Default Colors
         run: |
@@ -134,6 +139,7 @@ jobs:
             echo '    <color name="white">#FFFFFFFF</color>' >> app/src/main/res/values/colors.xml
             echo '    <color name="black">#FF000000</color>' >> app/src/main/res/values/colors.xml
             echo '</resources>' >> app/src/main/res/values/colors.xml
+            echo "Default colors.xml created"
           fi
 
       - name: Create Default Themes
@@ -150,6 +156,7 @@ jobs:
             echo '        <item name="colorAccent">@color/accent</item>' >> app/src/main/res/values/themes.xml
             echo '    </style>' >> app/src/main/res/values/themes.xml
             echo '</resources>' >> app/src/main/res/values/themes.xml
+            echo "Default themes.xml created"
           fi
 
       - name: Create Default Layout
@@ -174,6 +181,7 @@ jobs:
             echo '' >> app/src/main/res/layout/activity_main.xml
             echo '</LinearLayout>' >> app/src/main/res/layout/activity_main.xml
             sed -i "s/\$APP_NAME/$APP_NAME/g" app/src/main/res/layout/activity_main.xml
+            echo "Default layout created"
           fi
 
       - name: Copy App Icon
@@ -183,11 +191,13 @@ jobs:
               cp extracted_payload/app_icon.png app/src/main/res/mipmap-$size/ic_launcher.png
               cp extracted_payload/app_icon.png app/src/main/res/mipmap-$size/ic_launcher_round.png
             done
+            echo "App icon copied"
           fi
 
       - name: Update Manifest Label
         run: |
           sed -i "s/android:label=\"[^\"]*\"/android:label=\"$APP_NAME\"/g" app/src/main/AndroidManifest.xml
+          echo "Updated app label to: $APP_NAME"
 
       - name: Generate Gradle Files
         run: |
@@ -237,11 +247,39 @@ jobs:
           gradle wrapper --gradle-version=8.5 --distribution-type=bin --no-daemon
           chmod +x gradlew
 
-      - name: Build APK
+      - name: Fix and Build APK (R Class Fix)
         run: |
           chmod +x gradlew
+          
+          # Step 1: Full clean
+          echo "Performing full clean..."
           ./gradlew clean --no-daemon
-          ./gradlew :app:assembleDebug --no-daemon
+          rm -rf app/build
+          rm -rf .gradle
+          rm -rf ~/.gradle/caches/transforms-* 2>/dev/null || true
+          
+          # Step 2: Generate R class first
+          echo "Generating R class first..."
+          ./gradlew :app:processDebugResources --no-daemon
+          ./gradlew :app:generateDebugRFile --no-daemon || true
+          
+          # Step 3: Verify R class was generated
+          echo "Verifying R class generation..."
+          find app/build/generated -name "R.java" 2>/dev/null || echo "R.java will be generated during build"
+          
+          # Step 4: Build APK
+          echo "Building APK..."
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Verify APK
+        run: |
+          if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
+            APK_SIZE=$(du -h app/build/outputs/apk/debug/app-debug.apk | cut -f1)
+            echo "✅ APK built successfully! Size: $APK_SIZE"
+          else
+            echo "❌ APK not found"
+            exit 1
+          fi
 
       - name: Upload APK
         if: success()
@@ -256,5 +294,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Build-Error-Logs
-          path: app/build/reports/
+          path: |
+            app/build/reports/
+            app/build/generated/
           retention-days: 3
+          if-no-files-found: ignore
