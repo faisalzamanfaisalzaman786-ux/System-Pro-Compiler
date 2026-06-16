@@ -49,7 +49,6 @@ jobs:
             exit 1
           fi
           mkdir -p extracted_payload
-          mkdir -p app/src/main
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/xml
@@ -63,18 +62,15 @@ jobs:
         run: |
           if [ -n "$PAYLOAD_DATA" ]; then
             echo "$PAYLOAD_DATA" > payload_b64.txt
-            base64 -d payload_b64.txt > payload.zip 2>/dev/null || { echo "Invalid base64 payload"; exit 1; }
-            unzip -o payload.zip -d extracted_payload/ || true
-            echo "Payload extracted successfully"
-          else
-            echo "No payload provided"
+            base64 -d payload_b64.txt > payload.zip
+            unzip -o payload.zip -d extracted_payload/
+            echo "Payload extracted"
           fi
 
-      - name: Copy AndroidManifest from Payload
+      - name: Copy AndroidManifest
         run: |
           if [ -f extracted_payload/AndroidManifest.xml ]; then
-            cp -f extracted_payload/AndroidManifest.xml app/src/main/AndroidManifest.xml
-            echo "AndroidManifest.xml copied from payload"
+            cp extracted_payload/AndroidManifest.xml app/src/main/AndroidManifest.xml
           else
             echo "ERROR: AndroidManifest.xml not found"
             exit 1
@@ -82,267 +78,148 @@ jobs:
 
       - name: Clean Old Java Files
         run: |
-          echo "Removing all old Java files from previous builds..."
           rm -rf app/src/main/java/com
           rm -rf app/src/main/java/org
-          rm -rf app/src/main/java/io
-          rm -rf app/src/main/java/net
           rm -rf app/src/main/java/*
-          echo "Old Java files removed"
 
-      - name: Copy Java Files from Payload
+      - name: Copy Java Files
         run: |
-          JAVA_FILES=$(find extracted_payload -name "*.java" -type f 2>/dev/null || echo "")
+          JAVA_FILES=$(find extracted_payload -name "*.java" -type f)
           if [ -z "$JAVA_FILES" ]; then
             echo "ERROR: No Java files found"
             exit 1
           fi
           PKG_PATH=$(echo "$TARGET_PACKAGE" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH"
-          echo "$JAVA_FILES" | while read file; do
-            if [ -f "$file" ]; then
-              cp -f "$file" "app/src/main/java/$PKG_PATH/"
-              echo "Copied: $(basename $file)"
-            fi
+          for file in $JAVA_FILES; do
+            cp "$file" "app/src/main/java/$PKG_PATH/"
           done
-          echo "Java files copied"
 
-      - name: Smart Update Package in Java Files
+      - name: Update Java Package
         run: |
           PKG_PATH=$(echo "$TARGET_PACKAGE" | tr '.' '/')
           for file in app/src/main/java/$PKG_PATH/*.java; do
             if [ -f "$file" ]; then
-              if grep -q "^package .*;" "$file" 2>/dev/null; then
-                CURRENT_PKG=$(grep "^package .*;" "$file" | sed 's/package \(.*\);/\\1/')
-                if [ "$CURRENT_PKG" != "$TARGET_PACKAGE" ]; then
-                  sed -i "s/^package .*;/package $TARGET_PACKAGE;/g" "$file"
-                  echo "Updated package in: $(basename $file)"
-                fi
-              else
-                echo "package $TARGET_PACKAGE;" | cat - "$file" > temp && mv temp "$file"
-                echo "Added package line to: $(basename $file)"
-              fi
+              sed -i "s/^package .*;/package $TARGET_PACKAGE;/g" "$file"
             fi
           done
 
-      - name: Copy Layout Files from Payload
+      - name: Copy Layout and Resources
         run: |
           if [ -d extracted_payload/res/layout ]; then
-            cp -rf extracted_payload/res/layout/* app/src/main/res/layout/ 2>/dev/null
-            echo "Layout files copied"
-          fi
-
-      - name: Copy Resource Files from Payload
-        run: |
-          if [ -d extracted_payload/res/drawable ]; then
-            cp -rf extracted_payload/res/drawable/* app/src/main/res/drawable/ 2>/dev/null
+            cp -r extracted_payload/res/layout/* app/src/main/res/layout/ 2>/dev/null
           fi
           if [ -d extracted_payload/res/values ]; then
-            cp -rf extracted_payload/res/values/* app/src/main/res/values/ 2>/dev/null
+            cp -r extracted_payload/res/values/* app/src/main/res/values/ 2>/dev/null
+          fi
+          if [ -d extracted_payload/res/drawable ]; then
+            cp -r extracted_payload/res/drawable/* app/src/main/res/drawable/ 2>/dev/null
           fi
           if [ -d extracted_payload/res/xml ]; then
-            cp -rf extracted_payload/res/xml/* app/src/main/res/xml/ 2>/dev/null
+            cp -r extracted_payload/res/xml/* app/src/main/res/xml/ 2>/dev/null
           fi
-          echo "Resources copied"
 
-      - name: Create Default Colors with Smart Contrast
+      - name: Create Default Colors
         run: |
           if [ ! -f app/src/main/res/values/colors.xml ]; then
-            cat > app/src/main/res/values/colors.xml << 'EOF'
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <!-- Light Theme Colors -->
-    <color name="background_light">#FFFFFFFF</color>
-    <color name="text_primary_light">#FF000000</color>
-    <color name="text_secondary_light">#FF666666</color>
-    
-    <!-- Dark Theme Colors -->
-    <color name="background_dark">#FF121212</color>
-    <color name="text_primary_dark">#FFFFFFFF</color>
-    <color name="text_secondary_dark">#FFB0B0B0</color>
-    
-    <!-- Theme-Aware Colors (will be selected by system) -->
-    <color name="background">@color/background_light</color>
-    <color name="text_primary">@color/text_primary_light</color>
-    <color name="text_secondary">@color/text_secondary_light</color>
-    
-    <!-- Accent Colors -->
-    <color name="primary">#FF6200EE</color>
-    <color name="primary_dark">#FF3700B3</color>
-    <color name="accent">#FF03DAC5</color>
-    <color name="white">#FFFFFFFF</color>
-    <color name="black">#FF000000</color>
-</resources>
-EOF
-            echo "✓ Default colors.xml created with smart contrast support"
-          else
-            echo "✓ Using user-provided colors.xml"
+            echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/values/colors.xml
+            echo '<resources>' >> app/src/main/res/values/colors.xml
+            echo '    <color name="background">#FFFFFFFF</color>' >> app/src/main/res/values/colors.xml
+            echo '    <color name="text_primary">#FF000000</color>' >> app/src/main/res/values/colors.xml
+            echo '    <color name="text_secondary">#FF666666</color>' >> app/src/main/res/values/colors.xml
+            echo '    <color name="background_dark">#FF121212</color>' >> app/src/main/res/values/colors.xml
+            echo '    <color name="text_primary_dark">#FFFFFFFF</color>' >> app/src/main/res/values/colors.xml
+            echo '    <color name="primary">#FF6200EE</color>' >> app/src/main/res/values/colors.xml
+            echo '    <color name="accent">#FF03DAC5</color>' >> app/src/main/res/values/colors.xml
+            echo '    <color name="white">#FFFFFFFF</color>' >> app/src/main/res/values/colors.xml
+            echo '    <color name="black">#FF000000</color>' >> app/src/main/res/values/colors.xml
+            echo '</resources>' >> app/src/main/res/values/colors.xml
           fi
 
-      - name: Create Default Themes with Auto Contrast
+      - name: Create Default Themes
         run: |
           if [ ! -f app/src/main/res/values/themes.xml ]; then
-            cat > app/src/main/res/values/themes.xml << 'EOF'
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <!-- Base application theme that automatically switches between light/dark -->
-    <style name="Theme.AppCompat.NoActionBar" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <!-- Status bar color -->
-        <item name="android:statusBarColor">@color/primary_dark</item>
-        
-        <!-- Window background -->
-        <item name="android:windowBackground">@color/background</item>
-        
-        <!-- Text colors that contrast with background -->
-        <item name="android:textColorPrimary">@color/text_primary</item>
-        <item name="android:textColorSecondary">@color/text_secondary</item>
-        
-        <!-- Action bar (hidden) -->
-        <item name="windowNoTitle">true</item>
-        <item name="windowActionBar">false</item>
-        
-        <!-- Accent colors -->
-        <item name="colorPrimary">@color/primary</item>
-        <item name="colorPrimaryDark">@color/primary_dark</item>
-        <item name="colorAccent">@color/accent</item>
-        
-        <!-- Ensure text is visible on all backgrounds -->
-        <item name="android:textColor">@color/text_primary</item>
-    </style>
-    
-    <!-- Night mode variant - dark background with light text -->
-    <style name="Theme.AppCompat.NoActionBar" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <item name="android:statusBarColor">@color/primary_dark</item>
-        <item name="android:windowBackground">@color/background_dark</item>
-        <item name="android:textColorPrimary">@color/text_primary_dark</item>
-        <item name="android:textColorSecondary">@color/text_secondary_dark</item>
-        <item name="windowNoTitle">true</item>
-        <item name="windowActionBar">false</item>
-        <item name="colorPrimary">@color/primary</item>
-        <item name="colorPrimaryDark">@color/primary_dark</item>
-        <item name="colorAccent">@color/accent</item>
-        <item name="android:textColor">@color/text_primary_dark</item>
-    </style>
-</resources>
-EOF
-            echo "✓ Default themes.xml created with auto-contrast (light/dark mode support)"
-          else
-            echo "✓ Using user-provided themes.xml"
+            echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/values/themes.xml
+            echo '<resources>' >> app/src/main/res/values/themes.xml
+            echo '    <style name="Theme.AppCompat.NoActionBar" parent="Theme.MaterialComponents.DayNight.NoActionBar">' >> app/src/main/res/values/themes.xml
+            echo '        <item name="android:windowBackground">@color/background</item>' >> app/src/main/res/values/themes.xml
+            echo '        <item name="android:textColorPrimary">@color/text_primary</item>' >> app/src/main/res/values/themes.xml
+            echo '        <item name="windowNoTitle">true</item>' >> app/src/main/res/values/themes.xml
+            echo '        <item name="windowActionBar">false</item>' >> app/src/main/res/values/themes.xml
+            echo '        <item name="colorPrimary">@color/primary</item>' >> app/src/main/res/values/themes.xml
+            echo '        <item name="colorAccent">@color/accent</item>' >> app/src/main/res/values/themes.xml
+            echo '    </style>' >> app/src/main/res/values/themes.xml
+            echo '</resources>' >> app/src/main/res/values/themes.xml
           fi
 
-      - name: Create Default Strings
-        run: |
-          if [ ! -f app/src/main/res/values/strings.xml ]; then
-            cat > app/src/main/res/values/strings.xml << 'EOF'
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="app_name">APP_NAME_PLACEHOLDER</string>
-</resources>
-EOF
-            sed -i "s/APP_NAME_PLACEHOLDER/$APP_NAME/g" app/src/main/res/values/strings.xml
-            echo "✓ Default strings.xml created"
-          fi
-
-      - name: Create Default Layout (If No Layout Provided)
+      - name: Create Default Layout
         run: |
           if [ ! -f app/src/main/res/layout/activity_main.xml ]; then
-            cat > app/src/main/res/layout/activity_main.xml << 'EOF'
-<?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:gravity="center"
-    android:orientation="vertical"
-    android:background="@color/background">
-
-    <TextView
-        android:id="@+id/tvHello"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="APP_NAME_PLACEHOLDER"
-        android:textSize="28sp"
-        android:textColor="@color/text_primary"
-        android:textStyle="bold"
-        android:padding="16dp"/>
-
-</LinearLayout>
-EOF
-            sed -i "s/APP_NAME_PLACEHOLDER/$APP_NAME/g" app/src/main/res/layout/activity_main.xml
-            echo "✓ Default layout created"
+            echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/layout/activity_main.xml
+            echo '<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"' >> app/src/main/res/layout/activity_main.xml
+            echo '    android:layout_width="match_parent"' >> app/src/main/res/layout/activity_main.xml
+            echo '    android:layout_height="match_parent"' >> app/src/main/res/layout/activity_main.xml
+            echo '    android:gravity="center"' >> app/src/main/res/layout/activity_main.xml
+            echo '    android:orientation="vertical"' >> app/src/main/res/layout/activity_main.xml
+            echo '    android:background="@color/background">' >> app/src/main/res/layout/activity_main.xml
+            echo '' >> app/src/main/res/layout/activity_main.xml
+            echo '    <TextView' >> app/src/main/res/layout/activity_main.xml
+            echo '        android:id="@+id/tvHello"' >> app/src/main/res/layout/activity_main.xml
+            echo '        android:layout_width="wrap_content"' >> app/src/main/res/layout/activity_main.xml
+            echo '        android:layout_height="wrap_content"' >> app/src/main/res/layout/activity_main.xml
+            echo '        android:text="$APP_NAME"' >> app/src/main/res/layout/activity_main.xml
+            echo '        android:textSize="28sp"' >> app/src/main/res/layout/activity_main.xml
+            echo '        android:textColor="@color/text_primary"' >> app/src/main/res/layout/activity_main.xml
+            echo '        android:textStyle="bold"/>' >> app/src/main/res/layout/activity_main.xml
+            echo '' >> app/src/main/res/layout/activity_main.xml
+            echo '</LinearLayout>' >> app/src/main/res/layout/activity_main.xml
+            sed -i "s/\$APP_NAME/$APP_NAME/g" app/src/main/res/layout/activity_main.xml
           fi
 
-      - name: Copy App Icon from Payload
+      - name: Copy App Icon
         run: |
           if [ -f extracted_payload/app_icon.png ]; then
             for size in hdpi xhdpi xxhdpi; do
-              cp -f extracted_payload/app_icon.png app/src/main/res/mipmap-$size/ic_launcher.png
-              cp -f extracted_payload/app_icon.png app/src/main/res/mipmap-$size/ic_launcher_round.png
+              cp extracted_payload/app_icon.png app/src/main/res/mipmap-$size/ic_launcher.png
+              cp extracted_payload/app_icon.png app/src/main/res/mipmap-$size/ic_launcher_round.png
             done
-            echo "App icon copied"
           fi
 
-      - name: Smart Update Manifest
+      - name: Update Manifest Label
         run: |
-          if [ -f app/src/main/AndroidManifest.xml ]; then
-            sed -i "s/android:label=\"[^\"]*\"/android:label=\"$APP_NAME\"/g" app/src/main/AndroidManifest.xml
-            echo "Updated app label to: $APP_NAME"
-            if grep -q "package=\"" app/src/main/AndroidManifest.xml; then
-              sed -i "s/package=\"[^\"]*\"/package=\"$TARGET_PACKAGE\"/g" app/src/main/AndroidManifest.xml
-              echo "Updated package attribute"
-            fi
-          fi
+          sed -i "s/android:label=\"[^\"]*\"/android:label=\"$APP_NAME\"/g" app/src/main/AndroidManifest.xml
 
-      - name: Generate Gradle Build Files
+      - name: Generate Gradle Files
         run: |
           echo 'pluginManagement {' > settings.gradle
-          echo '    repositories {' >> settings.gradle
-          echo '        google()' >> settings.gradle
-          echo '        mavenCentral()' >> settings.gradle
-          echo '        gradlePluginPortal()' >> settings.gradle
-          echo '    }' >> settings.gradle
+          echo '    repositories { google(); mavenCentral(); gradlePluginPortal() }' >> settings.gradle
           echo '}' >> settings.gradle
-          echo '' >> settings.gradle
           echo 'dependencyResolutionManagement {' >> settings.gradle
-          echo '    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)' >> settings.gradle
-          echo '    repositories {' >> settings.gradle
-          echo '        google()' >> settings.gradle
-          echo '        mavenCentral()' >> settings.gradle
-          echo '    }' >> settings.gradle
+          echo '    repositories { google(); mavenCentral() }' >> settings.gradle
           echo '}' >> settings.gradle
-          echo '' >> settings.gradle
           echo 'rootProject.name = "MyApp"' >> settings.gradle
           echo 'include ":app"' >> settings.gradle
 
-      - name: Create Root Build Gradle
-        run: |
           echo 'plugins {' > build.gradle
           echo '    id "com.android.application" version "8.2.2" apply false' >> build.gradle
           echo '}' >> build.gradle
 
-      - name: Create App Build Gradle
-        run: |
-          echo 'plugins {' > app/build.gradle
-          echo '    id "com.android.application"' >> app/build.gradle
-          echo '}' >> app/build.gradle
-          echo '' >> app/build.gradle
+          echo 'plugins { id "com.android.application" }' > app/build.gradle
           echo 'android {' >> app/build.gradle
-          echo '    namespace "'"$TARGET_PACKAGE"'"' >> app/build.gradle
+          echo '    namespace "'$TARGET_PACKAGE'"' >> app/build.gradle
           echo '    compileSdk 34' >> app/build.gradle
-          echo '' >> app/build.gradle
           echo '    defaultConfig {' >> app/build.gradle
-          echo '        applicationId "'"$TARGET_PACKAGE"'"' >> app/build.gradle
+          echo '        applicationId "'$TARGET_PACKAGE'"' >> app/build.gradle
           echo '        minSdk 21' >> app/build.gradle
           echo '        targetSdk 34' >> app/build.gradle
           echo '        versionCode 1' >> app/build.gradle
           echo '        versionName "1.0"' >> app/build.gradle
           echo '    }' >> app/build.gradle
-          echo '' >> app/build.gradle
           echo '    compileOptions {' >> app/build.gradle
           echo '        sourceCompatibility JavaVersion.VERSION_17' >> app/build.gradle
           echo '        targetCompatibility JavaVersion.VERSION_17' >> app/build.gradle
           echo '    }' >> app/build.gradle
           echo '}' >> app/build.gradle
-          echo '' >> app/build.gradle
           echo 'dependencies {' >> app/build.gradle
           echo '    implementation "androidx.appcompat:appcompat:1.6.1"' >> app/build.gradle
           echo '    implementation "com.google.android.material:material:1.11.0"' >> app/build.gradle
@@ -357,40 +234,14 @@ EOF
 
       - name: Setup Gradle Wrapper
         run: |
-          rm -rf gradle gradlew gradlew.bat gradle-wrapper.jar gradle-wrapper.properties 2>/dev/null || true
           gradle wrapper --gradle-version=8.5 --distribution-type=bin --no-daemon
           chmod +x gradlew
-          if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
-            mkdir -p gradle/wrapper
-            curl -L -o gradle/wrapper/gradle-wrapper.jar https://github.com/gradle/gradle/raw/v8.5.0/gradle/wrapper/gradle-wrapper.jar
-            chmod +x gradle/wrapper/gradle-wrapper.jar
-          fi
 
-      - name: Clean and Build APK
+      - name: Build APK
         run: |
           chmod +x gradlew
-          
-          echo "Performing deep clean..."
-          ./gradlew clean --no-daemon --stacktrace || true
-          rm -rf app/build
-          rm -rf .gradle
-          rm -rf ~/.gradle/caches/transforms-* 2>/dev/null || true
-          
-          echo "Verifying resource files..."
-          ls -la app/src/main/res/values/
-          
-          echo "Building APK..."
-          ./gradlew :app:assembleDebug --no-daemon --stacktrace
-
-      - name: Verify APK
-        run: |
-          if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
-            APK_SIZE=$(du -h app/build/outputs/apk/debug/app-debug.apk | cut -f1)
-            echo "✅ APK built successfully! Size: $APK_SIZE"
-          else
-            echo "❌ APK not found"
-            exit 1
-          fi
+          ./gradlew clean --no-daemon
+          ./gradlew :app:assembleDebug --no-daemon
 
       - name: Upload APK
         if: success()
@@ -405,15 +256,5 @@ EOF
         uses: actions/upload-artifact@v4
         with:
           name: Build-Error-Logs
-          path: |
-            app/build/reports/
-            build.log
+          path: app/build/reports/
           retention-days: 3
-          if-no-files-found: ignore
-
-      - name: Cleanup
-        if: always()
-        run: |
-          rm -f payload_b64.txt payload.zip 2>/dev/null || true
-          rm -rf extracted_payload 2>/dev/null || true
-          echo "Cleanup completed"
