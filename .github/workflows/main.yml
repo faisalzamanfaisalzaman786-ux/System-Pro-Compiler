@@ -48,12 +48,10 @@ jobs:
             echo "ERROR: No package_name provided"
             exit 1
           fi
-
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/*
           rm -rf gradle/wrapper/
           mkdir -p extracted_payload app/src/main/res/layout app/src/main/res/values app/src/main/res/mipmap-xxxhdpi
-
       - name: Process Payload
         run: |
           if [ -n "$PAYLOAD_DATA" ]; then
@@ -61,7 +59,6 @@ jobs:
             base64 -d payload_b64.txt > payload.zip 2>/dev/null || { echo "Invalid base64 payload"; exit 1; }
             unzip -o payload.zip -d extracted_payload/ || true
           fi
-
       - name: Create Clean Java Structure
         run: |
           PKG_PATH=$(echo "$TARGET_PACKAGE" | tr '.' '/')
@@ -78,7 +75,6 @@ jobs:
               }
           }
           EOF
-
       - name: Theme and Resource Handler
         run: |
           # سفید بیک گراؤنڈ اور سیاہ ٹیکسٹ کے لیے تھیم
@@ -102,7 +98,6 @@ jobs:
             cp extracted_payload/app_icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
             cp extracted_payload/app_icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
           fi
-
       - name: Generate Gradle Files
         run: |
           cat <<EOF > settings.gradle
@@ -131,13 +126,11 @@ jobs:
               implementation 'com.google.android.material:material:1.11.0'
           }
           EOF
-
       - name: Build APK
         run: |
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew assembleDebug --info
-
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
