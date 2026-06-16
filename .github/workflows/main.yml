@@ -52,7 +52,10 @@ jobs:
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/*
           rm -rf gradle/wrapper/
-          mkdir -p extracted_payload app/src/main/res/layout app/src/main/res/values
+          mkdir -p extracted_payload 
+          mkdir -p app/src/main/java
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/mipmap-hdpi
           mkdir -p app/src/main/res/mipmap-mdpi
           mkdir -p app/src/main/res/mipmap-xhdpi
@@ -69,55 +72,38 @@ jobs:
             ls -la extracted_payload/
           fi
 
-      - name: Create Minimal Project
+      - name: Create Default Icon (PNG)
         run: |
-          PKG_PATH=$(echo "$TARGET_PACKAGE" | tr '.' '/')
-          mkdir -p "app/src/main/java/$PKG_PATH"
+          # Create a simple default icon using ImageMagick
+          sudo apt-get update
+          sudo apt-get install -y imagemagick
           
-          # Simple MainActivity
-          cat <<EOF > "app/src/main/java/$PKG_PATH/MainActivity.java"
-          package $TARGET_PACKAGE;
-          import android.os.Bundle;
-          import android.widget.TextView;
-          import androidx.appcompat.app.AppCompatActivity;
+          # Create a simple colored square as icon
+          for size in 72 96 144 192; do
+            convert -size ${size}x${size} xc:#6200EE \
+              -gravity center -pointsize $((size/3)) -fill white -annotate 0 "A" \
+              app/src/main/res/mipmap-*/ic_launcher.png 2>/dev/null || true
+          done
           
-          public class MainActivity extends AppCompatActivity {
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  setContentView(R.layout.activity_main);
-              }
-          }
-          EOF
-          
-          # Simple Layout
-          cat <<EOF > app/src/main/res/layout/activity_main.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:gravity="center"
-              android:orientation="vertical"
-              android:background="#FFFFFF">
-              <TextView
-                  android:layout_width="wrap_content"
-                  android:layout_height="wrap_content"
-                  android:text="$APP_NAME"
-                  android:textSize="28sp"
-                  android:textColor="#000000"
-                  android:textStyle="bold"/>
-          </LinearLayout>
-          EOF
-          
-          # AndroidManifest
-          cat <<EOF > app/src/main/AndroidManifest.xml
+          # Create round icon
+          for size in 72 96 144 192; do
+            convert -size ${size}x${size} xc:#6200EE \
+              -gravity center -pointsize $((size/3)) -fill white -annotate 0 "A" \
+              app/src/main/res/mipmap-*/ic_launcher_round.png 2>/dev/null || true
+          done
+
+      - name: Create AndroidManifest
+        run: |
+          cat <<'EOF' > app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-              package="$TARGET_PACKAGE">
+              package="TARGET_PACKAGE_PLACEHOLDER">
               <application
+                  android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
-                  android:label="$APP_NAME"
-                  android:theme="@style/Theme.App"
-                  android:allowBackup="true">
+                  android:label="APP_NAME_PLACEHOLDER"
+                  android:roundIcon="@mipmap/ic_launcher_round"
+                  android:supportsRtl="true"
+                  android:theme="@style/Theme.App">
                   <activity
                       android:name=".MainActivity"
                       android:exported="true">
@@ -130,46 +116,132 @@ jobs:
           </manifest>
           EOF
           
-          # Theme
-          cat <<EOF > app/src/main/res/values/themes.xml
+          # Replace placeholders
+          sed -i "s|TARGET_PACKAGE_PLACEHOLDER|$TARGET_PACKAGE|g" app/src/main/AndroidManifest.xml
+          sed -i "s|APP_NAME_PLACEHOLDER|$APP_NAME|g" app/src/main/AndroidManifest.xml
+
+      - name: Create MainActivity
+        run: |
+          PKG_PATH=$(echo "$TARGET_PACKAGE" | tr '.' '/')
+          mkdir -p "app/src/main/java/$PKG_PATH"
+          
+          cat <<'EOF' > "app/src/main/java/$PKG_PATH/MainActivity.java"
+          package TARGET_PACKAGE_PLACEHOLDER;
+          
+          import android.os.Bundle;
+          import android.widget.TextView;
+          import androidx.appcompat.app.AppCompatActivity;
+          
+          public class MainActivity extends AppCompatActivity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setContentView(R.layout.activity_main);
+                  
+                  TextView textView = findViewById(R.id.tvHello);
+                  if (textView != null) {
+                      textView.setText("Hello from APP_NAME_PLACEHOLDER!");
+                  }
+              }
+          }
+          EOF
+          
+          sed -i "s|TARGET_PACKAGE_PLACEHOLDER|$TARGET_PACKAGE|g" "app/src/main/java/$PKG_PATH/MainActivity.java"
+          sed -i "s|APP_NAME_PLACEHOLDER|$APP_NAME|g" "app/src/main/java/$PKG_PATH/MainActivity.java"
+
+      - name: Create Layout
+        run: |
+          cat <<'EOF' > app/src/main/res/layout/activity_main.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:gravity="center"
+              android:orientation="vertical"
+              android:background="#FFFFFF">
+              <TextView
+                  android:id="@+id/tvHello"
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="Hello World!"
+                  android:textSize="28sp"
+                  android:textColor="#000000"
+                  android:textStyle="bold"/>
+          </LinearLayout>
+          EOF
+
+      - name: Create Theme and Resources
+        run: |
+          # themes.xml
+          cat <<'EOF' > app/src/main/res/values/themes.xml
           <resources>
               <style name="Theme.App" parent="Theme.MaterialComponents.Light.NoActionBar">
                   <item name="colorPrimary">#6200EE</item>
+                  <item name="colorPrimaryVariant">#3700B3</item>
+                  <item name="colorOnPrimary">#FFFFFF</item>
+                  <item name="colorSecondary">#03DAC6</item>
+                  <item name="colorSecondaryVariant">#018786</item>
+                  <item name="colorOnSecondary">#000000</item>
                   <item name="android:windowBackground">#FFFFFF</item>
+                  <item name="android:textColorPrimary">#000000</item>
               </style>
           </resources>
           EOF
           
-          # Strings
-          cat <<EOF > app/src/main/res/values/strings.xml
+          # strings.xml
+          cat <<'EOF' > app/src/main/res/values/strings.xml
           <resources>
-              <string name="app_name">$APP_NAME</string>
+              <string name="app_name">APP_NAME_PLACEHOLDER</string>
+          </resources>
+          EOF
+          
+          sed -i "s|APP_NAME_PLACEHOLDER|$APP_NAME|g" app/src/main/res/values/strings.xml
+          
+          # colors.xml
+          cat <<'EOF' > app/src/main/res/values/colors.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="colorPrimary">#6200EE</color>
+              <color name="colorPrimaryVariant">#3700B3</color>
+              <color name="colorOnPrimary">#FFFFFF</color>
+              <color name="colorSecondary">#03DAC6</color>
+              <color name="colorSecondaryVariant">#018786</color>
+              <color name="colorOnSecondary">#000000</color>
+              <color name="white">#FFFFFF</color>
+              <color name="black">#000000</color>
           </resources>
           EOF
 
-      - name: Handle Custom Icon
+      - name: Handle Custom Icon from Payload
         run: |
           if [ -f extracted_payload/app_icon.png ]; then
-            echo "✅ Custom icon found"
+            echo "✅ Custom icon found, copying to all mipmap folders..."
             for dir in app/src/main/res/mipmap-*/; do
               cp extracted_payload/app_icon.png "$dir/ic_launcher.png"
               cp extracted_payload/app_icon.png "$dir/ic_launcher_round.png"
             done
+            echo "✅ Custom icon applied"
           else
-            echo "ℹ️ Using default icon"
-            # Create a simple default icon
-            for dir in app/src/main/res/mipmap-*/; do
-              echo "<?xml version=\"1.0\" encoding=\"utf-8\"?>" > "$dir/ic_launcher.xml"
-              echo "<adaptive-icon xmlns:android=\"http://schemas.android.com/apk/res/android\">" >> "$dir/ic_launcher.xml"
-              echo "    <background android:drawable=\"@color/white\"/>" >> "$dir/ic_launcher.xml"
-              echo "    <foreground android:drawable=\"@mipmap/ic_launcher_foreground\"/>" >> "$dir/ic_launcher.xml"
-              echo "</adaptive-icon>" >> "$dir/ic_launcher.xml"
-            done
+            echo "ℹ️ No custom icon, using default"
+          fi
+
+      - name: Copy Payload Resources
+        run: |
+          # Copy layout if exists
+          if [ -f extracted_payload/res/layout/activity_main.xml ]; then
+            cp extracted_payload/res/layout/activity_main.xml app/src/main/res/layout/activity_main.xml
+            echo "✅ Layout copied from payload"
+          fi
+          
+          # Copy values if exists
+          if [ -d extracted_payload/res/values ]; then
+            cp -rn extracted_payload/res/values/* app/src/main/res/values/ 2>/dev/null || true
+            echo "✅ Values copied from payload"
           fi
 
       - name: Setup Gradle
         run: |
-          cat <<EOF > settings.gradle
+          cat <<'EOF' > settings.gradle
           pluginManagement {
               repositories {
                   google()
@@ -188,17 +260,17 @@ jobs:
           include ":app"
           EOF
           
-          cat <<EOF > app/build.gradle
+          cat <<'EOF' > app/build.gradle
           plugins {
               id 'com.android.application'
           }
           
           android {
-              namespace '$TARGET_PACKAGE'
+              namespace 'TARGET_PACKAGE_PLACEHOLDER'
               compileSdk 34
               
               defaultConfig {
-                  applicationId '$TARGET_PACKAGE'
+                  applicationId 'TARGET_PACKAGE_PLACEHOLDER'
                   minSdk 21
                   targetSdk 34
                   versionCode 1
@@ -215,28 +287,27 @@ jobs:
               implementation 'androidx.appcompat:appcompat:1.6.1'
           }
           EOF
+          
+          sed -i "s|TARGET_PACKAGE_PLACEHOLDER|$TARGET_PACKAGE|g" app/build.gradle
 
       - name: Show Project Structure
         run: |
-          echo "📂 Project Structure:"
+          echo "📂 Final Project Structure:"
           find app/src/main -type f | sort
           echo ""
           echo "📄 AndroidManifest.xml:"
           cat app/src/main/AndroidManifest.xml
           echo ""
           echo "📄 MainActivity.java:"
-          cat app/src/main/java/$(echo "$TARGET_PACKAGE" | tr '.' '/')/MainActivity.java
+          PKG_PATH=$(echo "$TARGET_PACKAGE" | tr '.' '/')
+          cat "app/src/main/java/$PKG_PATH/MainActivity.java"
 
       - name: Build APK
         run: |
           echo "🔨 Building APK..."
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace || {
-            echo "❌ Build failed! Showing error:"
-            cat app/build/outputs/logs/manifest-merger-debug-report.txt 2>/dev/null || true
-            exit 1
-          }
+          ./gradlew assembleDebug
 
       - name: Upload APK
         if: success()
