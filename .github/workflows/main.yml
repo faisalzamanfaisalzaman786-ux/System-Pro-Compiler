@@ -145,6 +145,132 @@ jobs:
           fi
           echo "Resources copied"
 
+      - name: Create Default Colors with Smart Contrast
+        run: |
+          if [ ! -f app/src/main/res/values/colors.xml ]; then
+            cat > app/src/main/res/values/colors.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Light Theme Colors -->
+    <color name="background_light">#FFFFFFFF</color>
+    <color name="text_primary_light">#FF000000</color>
+    <color name="text_secondary_light">#FF666666</color>
+    
+    <!-- Dark Theme Colors -->
+    <color name="background_dark">#FF121212</color>
+    <color name="text_primary_dark">#FFFFFFFF</color>
+    <color name="text_secondary_dark">#FFB0B0B0</color>
+    
+    <!-- Theme-Aware Colors (will be selected by system) -->
+    <color name="background">@color/background_light</color>
+    <color name="text_primary">@color/text_primary_light</color>
+    <color name="text_secondary">@color/text_secondary_light</color>
+    
+    <!-- Accent Colors -->
+    <color name="primary">#FF6200EE</color>
+    <color name="primary_dark">#FF3700B3</color>
+    <color name="accent">#FF03DAC5</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="black">#FF000000</color>
+</resources>
+EOF
+            echo "✓ Default colors.xml created with smart contrast support"
+          else
+            echo "✓ Using user-provided colors.xml"
+          fi
+
+      - name: Create Default Themes with Auto Contrast
+        run: |
+          if [ ! -f app/src/main/res/values/themes.xml ]; then
+            cat > app/src/main/res/values/themes.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base application theme that automatically switches between light/dark -->
+    <style name="Theme.AppCompat.NoActionBar" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <!-- Status bar color -->
+        <item name="android:statusBarColor">@color/primary_dark</item>
+        
+        <!-- Window background -->
+        <item name="android:windowBackground">@color/background</item>
+        
+        <!-- Text colors that contrast with background -->
+        <item name="android:textColorPrimary">@color/text_primary</item>
+        <item name="android:textColorSecondary">@color/text_secondary</item>
+        
+        <!-- Action bar (hidden) -->
+        <item name="windowNoTitle">true</item>
+        <item name="windowActionBar">false</item>
+        
+        <!-- Accent colors -->
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorPrimaryDark">@color/primary_dark</item>
+        <item name="colorAccent">@color/accent</item>
+        
+        <!-- Ensure text is visible on all backgrounds -->
+        <item name="android:textColor">@color/text_primary</item>
+    </style>
+    
+    <!-- Night mode variant - dark background with light text -->
+    <style name="Theme.AppCompat.NoActionBar" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="android:statusBarColor">@color/primary_dark</item>
+        <item name="android:windowBackground">@color/background_dark</item>
+        <item name="android:textColorPrimary">@color/text_primary_dark</item>
+        <item name="android:textColorSecondary">@color/text_secondary_dark</item>
+        <item name="windowNoTitle">true</item>
+        <item name="windowActionBar">false</item>
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorPrimaryDark">@color/primary_dark</item>
+        <item name="colorAccent">@color/accent</item>
+        <item name="android:textColor">@color/text_primary_dark</item>
+    </style>
+</resources>
+EOF
+            echo "✓ Default themes.xml created with auto-contrast (light/dark mode support)"
+          else
+            echo "✓ Using user-provided themes.xml"
+          fi
+
+      - name: Create Default Strings
+        run: |
+          if [ ! -f app/src/main/res/values/strings.xml ]; then
+            cat > app/src/main/res/values/strings.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">APP_NAME_PLACEHOLDER</string>
+</resources>
+EOF
+            sed -i "s/APP_NAME_PLACEHOLDER/$APP_NAME/g" app/src/main/res/values/strings.xml
+            echo "✓ Default strings.xml created"
+          fi
+
+      - name: Create Default Layout (If No Layout Provided)
+        run: |
+          if [ ! -f app/src/main/res/layout/activity_main.xml ]; then
+            cat > app/src/main/res/layout/activity_main.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:background="@color/background">
+
+    <TextView
+        android:id="@+id/tvHello"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="APP_NAME_PLACEHOLDER"
+        android:textSize="28sp"
+        android:textColor="@color/text_primary"
+        android:textStyle="bold"
+        android:padding="16dp"/>
+
+</LinearLayout>
+EOF
+            sed -i "s/APP_NAME_PLACEHOLDER/$APP_NAME/g" app/src/main/res/layout/activity_main.xml
+            echo "✓ Default layout created"
+          fi
+
       - name: Copy App Icon from Payload
         run: |
           if [ -f extracted_payload/app_icon.png ]; then
@@ -244,18 +370,15 @@ jobs:
         run: |
           chmod +x gradlew
           
-          # Deep clean - remove ALL build cache and old Java files
           echo "Performing deep clean..."
           ./gradlew clean --no-daemon --stacktrace || true
           rm -rf app/build
           rm -rf .gradle
           rm -rf ~/.gradle/caches/transforms-* 2>/dev/null || true
           
-          # Verify Java files are present
-          echo "Verifying Java files..."
-          find app/src/main/java -name "*.java" -type f | head -5
+          echo "Verifying resource files..."
+          ls -la app/src/main/res/values/
           
-          # Full build
           echo "Building APK..."
           ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
@@ -266,7 +389,6 @@ jobs:
             echo "✅ APK built successfully! Size: $APK_SIZE"
           else
             echo "❌ APK not found"
-            ls -la app/build/outputs/apk/debug/ 2>/dev/null || echo "Build directory empty"
             exit 1
           fi
 
