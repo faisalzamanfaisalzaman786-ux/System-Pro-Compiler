@@ -1,4 +1,4 @@
-name: System Pro Titan Master Build (Fixed)
+name: System Pro Titan Master Build
 
 on:
   repository_dispatch:
@@ -241,10 +241,19 @@ jobs:
           echo 'android.useAndroidX=true' >> gradle.properties
           echo 'android.enableJetifier=true' >> gradle.properties
 
-      - name: Setup Gradle Wrapper
+      - name: Setup Gradle Wrapper (Force 8.5)
         run: |
+          # Remove any existing wrapper files
+          rm -rf gradle/wrapper
+          rm -f gradlew gradlew.bat
+          
+          # Create fresh wrapper with Gradle 8.5
           gradle wrapper --gradle-version=8.5 --distribution-type=bin --no-daemon
           chmod +x gradlew
+          
+          # Verify the version
+          echo "✅ Gradle wrapper configured:"
+          ./gradlew --version | grep "Gradle"
 
       - name: Build APK
         run: |
@@ -253,7 +262,7 @@ jobs:
           ./gradlew clean --no-daemon || true
           rm -rf app/build
           rm -rf .gradle
-          echo "Building APK..."
+          echo "Building APK with Gradle 8.5..."
           ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
       - name: Verify APK
@@ -263,6 +272,8 @@ jobs:
             echo "✅ APK built successfully! Size: $APK_SIZE"
           else
             echo "❌ APK not found"
+            echo "Listing build directory..."
+            ls -la app/build/outputs/apk/debug/ 2>/dev/null || echo "No APK found"
             exit 1
           fi
 
