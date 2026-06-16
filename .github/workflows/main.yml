@@ -82,6 +82,13 @@ jobs:
           }
           EOF
 
+      - name: Copy Resources
+        run: |
+          [ -d extracted_payload/res/layout ] && cp -rn extracted_payload/res/layout/* app/src/main/res/layout/ 2>/dev/null || true
+          [ -d extracted_payload/res/values ] && cp -rn extracted_payload/res/values/* app/src/main/res/values/ 2>/dev/null || true
+          [ -d extracted_payload/res/drawable ] && cp -rn extracted_payload/res/drawable/* app/src/main/res/drawable/ 2>/dev/null || true
+          [ -f extracted_payload/AndroidManifest.xml ] && cp extracted_payload/AndroidManifest.xml app/src/main/AndroidManifest.xml || true
+
       - name: Generate Gradle Files
         run: |
           cat <<EOF > settings.gradle
@@ -90,6 +97,13 @@ jobs:
                   google()
                   mavenCentral()
                   gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
               }
           }
           rootProject.name = "SystemPro"
