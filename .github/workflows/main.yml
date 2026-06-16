@@ -1,6 +1,60 @@
-        name: Create Build Files
+name: System Pro Titan Master Build
+
+on:
+  repository_dispatch:
+    types: [trigger_b64_build]
+  workflow_dispatch:
+    inputs:
+      package_name:
+        description: 'Package Name'
+        required: true
+        default: 'com.example.app'
+        type: string
+      app_name:
+        description: 'App Name'
+        required: true
+        default: 'MyApp'
+        type: string
+      payload:
+        description: 'Base64 Encoded Payload'
+        required: false
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Environment
         run: |
-          # 1. settings.gradle میں پلگ ان ریپوزٹریز کا ہونا ضروری ہے
+          if [ -n "${{ github.event.client_payload.package_name }}" ]; then
+            echo "TARGET_PACKAGE=${{ github.event.client_payload.package_name }}" >> $GITHUB_ENV
+            echo "APP_NAME=${{ github.event.client_payload.app_name }}" >> $GITHUB_ENV
+            echo "PAYLOAD_DATA=${{ github.event.client_payload.payload }}" >> $GITHUB_ENV
+          elif [ -n "${{ github.event.inputs.package_name }}" ]; then
+            echo "TARGET_PACKAGE=${{ github.event.inputs.package_name }}" >> $GITHUB_ENV
+            echo "APP_NAME=${{ github.event.inputs.app_name }}" >> $GITHUB_ENV
+            echo "PAYLOAD_DATA=${{ github.event.inputs.payload }}" >> $GITHUB_ENV
+          else
+            echo "ERROR: No package_name provided"
+            exit 1
+          fi
+
+      - name: Create Build Files
+        run: |
+          mkdir -p app/src/main/java
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+
           cat <<EOF > settings.gradle
           pluginManagement {
               repositories {
@@ -20,16 +74,13 @@
           include ":app"
           EOF
           
-          # 2. app/build.gradle میں پلگ ان کا ورژن بتائیں
           cat <<EOF > app/build.gradle
           plugins {
               id 'com.android.application' version '8.2.2'
           }
-          
           android {
               namespace '$TARGET_PACKAGE'
               compileSdk 34
-              
               defaultConfig {
                   applicationId '$TARGET_PACKAGE'
                   minSdk 21
@@ -37,14 +88,19 @@
                   versionCode 1
                   versionName "1.0"
               }
-              
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
           }
-          
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
           }
           EOF
+
+      - name: Build APK
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: App-Build
+          path: app/build/outputs/apk/debug/app-debug.apk
