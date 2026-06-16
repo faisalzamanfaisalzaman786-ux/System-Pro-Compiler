@@ -49,15 +49,17 @@ jobs:
             exit 1
           fi
 
-          echo "📱 Target Package: $TARGET_PACKAGE"
-          echo "📱 App Name: $APP_NAME"
-
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/*
           rm -rf gradle/wrapper/
-          mkdir -p extracted_payload app/src/main/res/layout app/src/main/res/values
-          mkdir -p app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-mdpi
-          mkdir -p app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-xxhdpi
+          mkdir -p extracted_payload 
+          mkdir -p app/src/main/java
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-mdpi
+          mkdir -p app/src/main/res/mipmap-xhdpi
+          mkdir -p app/src/main/res/mipmap-xxhdpi
           mkdir -p app/src/main/res/mipmap-xxxhdpi
 
       - name: Process Payload
@@ -67,38 +69,44 @@ jobs:
             base64 -d payload_b64.txt > payload.zip 2>/dev/null || { echo "Invalid base64 payload"; exit 1; }
             unzip -o payload.zip -d extracted_payload/ || true
             echo "✅ Payload extracted"
-            ls -la extracted_payload/
           fi
 
-      - name: Create Default Icon
+      - name: Create Simple Icon
         run: |
-          # Create simple colored square icons using ImageMagick
-          sudo apt-get update
-          sudo apt-get install -y imagemagick
-          
-          for size in 72 96 144 192; do
-            # Create launcher icon
-            convert -size ${size}x${size} xc:#6200EE \
-              -gravity center -pointsize $((size/3)) -fill white -annotate 0 "A" \
-              app/src/main/res/mipmap-hdpi/ic_launcher.png 2>/dev/null || true
-            # Copy to other densities
-            cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-mdpi/ic_launcher.png 2>/dev/null || true
-            cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-xhdpi/ic_launcher.png 2>/dev/null || true
-            cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png 2>/dev/null || true
-            cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png 2>/dev/null || true
+          # Create a simple XML drawable as icon
+          for dir in app/src/main/res/mipmap-*/; do
+            # Create a simple colored circle as icon using Android XML
+            cat <<EOF > "$dir/ic_launcher.xml"
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@color/colorPrimary"/>
+              <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
+          </adaptive-icon>
+          EOF
+            
+            # Create foreground (simple shape)
+            cat <<EOF > "$dir/ic_launcher_foreground.xml"
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <path
+                  android:fillColor="#FFFFFF"
+                  android:pathData="M54,27 C42,27 32,37 32,49 C32,61 42,71 54,71 C66,71 76,61 76,49 C76,37 66,27 54,27 Z"/>
+          </vector>
+          EOF
           done
 
       - name: Handle Custom Icon
         run: |
           if [ -f extracted_payload/app_icon.png ]; then
-            echo "✅ Custom icon found, copying to all mipmap folders..."
+            echo "✅ Custom icon found"
             for dir in app/src/main/res/mipmap-*/; do
               cp extracted_payload/app_icon.png "$dir/ic_launcher.png"
               cp extracted_payload/app_icon.png "$dir/ic_launcher_round.png"
             done
-            echo "✅ Custom icon applied"
-          else
-            echo "ℹ️ Using default icon"
           fi
 
       - name: Create MainActivity
@@ -106,16 +114,8 @@ jobs:
           PKG_PATH=$(echo "$TARGET_PACKAGE" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH"
           
-          # Check if Java file exists in payload
-          if [ -d extracted_payload/java ]; then
-            find extracted_payload/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
-            echo "✅ Java files copied from payload"
-          fi
-          
-          # Create default if not exists
-          if [ ! -f "app/src/main/java/$PKG_PATH/MainActivity.java" ]; then
-            cat <<EOF > "app/src/main/java/$PKG_PATH/MainActivity.java"
-          package $TARGET_PACKAGE;
+          cat <<'EOF' > "app/src/main/java/$PKG_PATH/MainActivity.java"
+          package TARGET_PACKAGE_PLACEHOLDER;
           
           import android.os.Bundle;
           import android.widget.TextView;
@@ -126,25 +126,15 @@ jobs:
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   setContentView(R.layout.activity_main);
-                  
-                  TextView textView = findViewById(R.id.tvHello);
-                  if (textView != null) {
-                      textView.setText("Hello from $APP_NAME!");
-                  }
               }
           }
           EOF
-            echo "✅ Created default MainActivity"
-          fi
+          
+          sed -i "s|TARGET_PACKAGE_PLACEHOLDER|$TARGET_PACKAGE|g" "app/src/main/java/$PKG_PATH/MainActivity.java"
 
       - name: Create Layout
         run: |
-          # Check if layout exists in payload
-          if [ -f extracted_payload/res/layout/activity_main.xml ]; then
-            cp extracted_payload/res/layout/activity_main.xml app/src/main/res/layout/activity_main.xml
-            echo "✅ Layout copied from payload"
-          else
-            cat <<EOF > app/src/main/res/layout/activity_main.xml
+          cat <<'EOF' > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
@@ -156,28 +146,21 @@ jobs:
                   android:id="@+id/tvHello"
                   android:layout_width="wrap_content"
                   android:layout_height="wrap_content"
-                  android:text="Hello from $APP_NAME!"
+                  android:text="Hello World!"
                   android:textSize="28sp"
                   android:textColor="#000000"
                   android:textStyle="bold"/>
           </LinearLayout>
           EOF
-            echo "✅ Created default layout"
-          fi
 
       - name: Create AndroidManifest
         run: |
-          # Check if manifest exists in payload
-          if [ -f extracted_payload/AndroidManifest.xml ]; then
-            cp extracted_payload/AndroidManifest.xml app/src/main/AndroidManifest.xml
-            echo "✅ Manifest copied from payload"
-          else
-            cat <<EOF > app/src/main/AndroidManifest.xml
+          cat <<'EOF' > app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
-                  android:label="$APP_NAME"
+                  android:label="APP_NAME_PLACEHOLDER"
                   android:roundIcon="@mipmap/ic_launcher_round"
                   android:supportsRtl="true"
                   android:theme="@style/Theme.App">
@@ -192,37 +175,31 @@ jobs:
               </application>
           </manifest>
           EOF
-            echo "✅ Created default manifest"
-          fi
           
-          # Override app name in manifest
-          sed -i "s|android:label=\"[^\"]*\"|android:label=\"$APP_NAME\"|g" app/src/main/AndroidManifest.xml
-          
-          echo "📄 AndroidManifest.xml:"
-          cat app/src/main/AndroidManifest.xml
+          sed -i "s|APP_NAME_PLACEHOLDER|$APP_NAME|g" app/src/main/AndroidManifest.xml
 
-      - name: Create Theme and Resources
+      - name: Create Resources
         run: |
-          # ✅ FIXED: Using AppCompat theme (no Material Components needed)
-          cat <<EOF > app/src/main/res/values/themes.xml
+          # themes.xml - SIMPLE theme without Material Components
+          cat <<'EOF' > app/src/main/res/values/themes.xml
           <resources>
               <style name="Theme.App" parent="Theme.AppCompat.Light.NoActionBar">
                   <item name="colorPrimary">#6200EE</item>
                   <item name="android:windowBackground">#FFFFFF</item>
-                  <item name="android:textColorPrimary">#000000</item>
               </style>
           </resources>
           EOF
           
           # strings.xml
-          cat <<EOF > app/src/main/res/values/strings.xml
+          cat <<'EOF' > app/src/main/res/values/strings.xml
           <resources>
-              <string name="app_name">$APP_NAME</string>
+              <string name="app_name">APP_NAME_PLACEHOLDER</string>
           </resources>
           EOF
+          sed -i "s|APP_NAME_PLACEHOLDER|$APP_NAME|g" app/src/main/res/values/strings.xml
           
           # colors.xml
-          cat <<EOF > app/src/main/res/values/colors.xml
+          cat <<'EOF' > app/src/main/res/values/colors.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <color name="colorPrimary">#6200EE</color>
@@ -230,20 +207,10 @@ jobs:
               <color name="black">#000000</color>
           </resources>
           EOF
-          
-          echo "✅ Resources created with AppCompat theme"
-
-      - name: Copy Payload Resources
-        run: |
-          # Copy values if exists
-          if [ -d extracted_payload/res/values ]; then
-            cp -rn extracted_payload/res/values/* app/src/main/res/values/ 2>/dev/null || true
-            echo "✅ Values copied from payload"
-          fi
 
       - name: Setup Gradle
         run: |
-          cat <<EOF > settings.gradle
+          cat <<'EOF' > settings.gradle
           pluginManagement {
               repositories {
                   google()
@@ -262,18 +229,17 @@ jobs:
           include ":app"
           EOF
           
-          # ✅ FIXED: Added both appcompat AND material libraries
-          cat <<EOF > app/build.gradle
+          cat <<'EOF' > app/build.gradle
           plugins {
               id 'com.android.application'
           }
           
           android {
-              namespace '$TARGET_PACKAGE'
+              namespace 'TARGET_PACKAGE_PLACEHOLDER'
               compileSdk 34
               
               defaultConfig {
-                  applicationId '$TARGET_PACKAGE'
+                  applicationId 'TARGET_PACKAGE_PLACEHOLDER'
                   minSdk 21
                   targetSdk 34
                   versionCode 1
@@ -288,22 +254,15 @@ jobs:
           
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.11.0'
           }
           EOF
           
-          echo "✅ Gradle files generated with both appcompat and material"
+          sed -i "s|TARGET_PACKAGE_PLACEHOLDER|$TARGET_PACKAGE|g" app/build.gradle
 
       - name: Show Project Structure
         run: |
-          echo "📂 Final Project Structure:"
+          echo "📂 Project Structure:"
           find app/src/main -type f | sort
-          echo ""
-          echo "📄 AndroidManifest.xml:"
-          cat app/src/main/AndroidManifest.xml
-          echo ""
-          echo "📄 build.gradle:"
-          cat app/build.gradle
 
       - name: Build APK
         run: |
