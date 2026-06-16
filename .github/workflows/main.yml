@@ -32,7 +32,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '17'       # ✅ Java 17 (Gradle 8.x کے لیے ضروری)
+          java-version: '17'
 
       - name: Initialize Environment
         run: |
@@ -110,6 +110,32 @@ jobs:
               echo "Updated package in: $(basename $file)"
             fi
           done
+
+      - name: Fix MainActivity Java File
+        run: |
+          PKG_PATH=$(echo "$TARGET_PACKAGE" | tr '.' '/')
+          JAVA_FILE="app/src/main/java/$PKG_PATH/MainActivity.java"
+          
+          if [ -f "$JAVA_FILE" ]; then
+            # Fix duplicate import issue
+            sed -i 's/import import/import/g' "$JAVA_FILE"
+            
+            # Remove any malformed import lines
+            sed -i '/^import [a-z]*\.[a-z]*\.[a-z]*\.[a-z]*\.[a-z]*\.[a-z]*$/d' "$JAVA_FILE"
+            
+            # Ensure proper imports
+            if ! grep -q "import android.os.Bundle" "$JAVA_FILE"; then
+              sed -i '/^package /a import android.os.Bundle;' "$JAVA_FILE"
+            fi
+            if ! grep -q "import android.widget.TextView" "$JAVA_FILE"; then
+              sed -i '/^import android.os.Bundle;/a import android.widget.TextView;' "$JAVA_FILE"
+            fi
+            if ! grep -q "import androidx.appcompat.app.AppCompatActivity" "$JAVA_FILE"; then
+              sed -i '/^import android.widget.TextView;/a import androidx.appcompat.app.AppCompatActivity;' "$JAVA_FILE"
+            fi
+            
+            echo "Java file fixed"
+          fi
 
       - name: Copy Layout and Resources
         run: |
