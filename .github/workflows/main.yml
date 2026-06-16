@@ -81,20 +81,23 @@ jobs:
 
       - name: Theme and Resource Handler
         run: |
-          # 1. تھیم جنریشن (ڈارک موڈ اور ٹیکسٹ کلر کے لیے)
+          # سفید بیک گراؤنڈ اور سیاہ ٹیکسٹ کے لیے تھیم
+          mkdir -p app/src/main/res/values
           cat <<EOF > app/src/main/res/values/themes.xml
           <resources>
-              <style name="Theme.App" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+              <style name="Theme.App" parent="Theme.MaterialComponents.Light.NoActionBar">
                   <item name="colorPrimary">#6200EE</item>
-                  <item name="android:textColorPrimary">#FFFFFF</item>
-                  <item name="android:windowBackground">#121212</item>
+                  <item name="android:windowBackground">#FFFFFF</item>
+                  <item name="android:textColorPrimary">#000000</item>
               </style>
           </resources>
           EOF
-          # 2. پی لوڈ سے لے آؤٹ اور مینی فیسٹ کاپی کریں
+          
+          # پی لوڈ سے ریسورسز کاپی کرنا
           [ -d extracted_payload/res/layout ] && cp -rn extracted_payload/res/layout/* app/src/main/res/layout/ 2>/dev/null || true
           [ -f extracted_payload/AndroidManifest.xml ] && cp extracted_payload/AndroidManifest.xml app/src/main/AndroidManifest.xml || true
-          # 3. آئیکن ہینڈلر
+          
+          # آئیکن ہینڈلر
           if [ -f extracted_payload/app_icon.png ]; then
             cp extracted_payload/app_icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
             cp extracted_payload/app_icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
