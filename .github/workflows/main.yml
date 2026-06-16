@@ -34,7 +34,7 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Initialize and Clean Environment
+      - name: Setup Environment
         run: |
           if [ -n "${{ github.event.client_payload.package_name }}" ]; then
             echo "TARGET_PACKAGE=${{ github.event.client_payload.package_name }}" >> $GITHUB_ENV
@@ -49,10 +49,14 @@ jobs:
             exit 1
           fi
 
+          echo "📱 Package: $TARGET_PACKAGE"
+          echo "📱 App Name: $APP_NAME"
+
+      - name: Clean and Create Structure
+        run: |
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/*
           rm -rf gradle/wrapper/
-          mkdir -p extracted_payload 
           mkdir -p app/src/main/java
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
@@ -61,61 +65,25 @@ jobs:
           mkdir -p app/src/main/res/mipmap-xhdpi
           mkdir -p app/src/main/res/mipmap-xxhdpi
           mkdir -p app/src/main/res/mipmap-xxxhdpi
+          mkdir -p extracted_payload
 
-      - name: Process Payload
+      - name: Process Payload (if any)
         run: |
           if [ -n "$PAYLOAD_DATA" ]; then
             echo "$PAYLOAD_DATA" > payload_b64.txt
-            base64 -d payload_b64.txt > payload.zip 2>/dev/null || { echo "Invalid base64 payload"; exit 1; }
-            unzip -o payload.zip -d extracted_payload/ || true
-            echo "✅ Payload extracted"
+            base64 -d payload_b64.txt > payload.zip 2>/dev/null || true
+            unzip -o payload.zip -d extracted_payload/ 2>/dev/null || true
+            echo "✅ Payload processed"
           fi
 
-      - name: Create Simple Icon
-        run: |
-          # Create a simple XML drawable as icon
-          for dir in app/src/main/res/mipmap-*/; do
-            # Create a simple colored circle as icon using Android XML
-            cat <<EOF > "$dir/ic_launcher.xml"
-          <?xml version="1.0" encoding="utf-8"?>
-          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-              <background android:drawable="@color/colorPrimary"/>
-              <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
-          </adaptive-icon>
-          EOF
-            
-            # Create foreground (simple shape)
-            cat <<EOF > "$dir/ic_launcher_foreground.xml"
-          <?xml version="1.0" encoding="utf-8"?>
-          <vector xmlns:android="http://schemas.android.com/apk/res/android"
-              android:width="108dp"
-              android:height="108dp"
-              android:viewportWidth="108"
-              android:viewportHeight="108">
-              <path
-                  android:fillColor="#FFFFFF"
-                  android:pathData="M54,27 C42,27 32,37 32,49 C32,61 42,71 54,71 C66,71 76,61 76,49 C76,37 66,27 54,27 Z"/>
-          </vector>
-          EOF
-          done
-
-      - name: Handle Custom Icon
-        run: |
-          if [ -f extracted_payload/app_icon.png ]; then
-            echo "✅ Custom icon found"
-            for dir in app/src/main/res/mipmap-*/; do
-              cp extracted_payload/app_icon.png "$dir/ic_launcher.png"
-              cp extracted_payload/app_icon.png "$dir/ic_launcher_round.png"
-            done
-          fi
-
-      - name: Create MainActivity
+      - name: Create Simple App Files
         run: |
           PKG_PATH=$(echo "$TARGET_PACKAGE" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH"
           
-          cat <<'EOF' > "app/src/main/java/$PKG_PATH/MainActivity.java"
-          package TARGET_PACKAGE_PLACEHOLDER;
+          # ✅ MainActivity
+          cat <<EOF > "app/src/main/java/$PKG_PATH/MainActivity.java"
+          package $TARGET_PACKAGE;
           
           import android.os.Bundle;
           import android.widget.TextView;
@@ -130,11 +98,8 @@ jobs:
           }
           EOF
           
-          sed -i "s|TARGET_PACKAGE_PLACEHOLDER|$TARGET_PACKAGE|g" "app/src/main/java/$PKG_PATH/MainActivity.java"
-
-      - name: Create Layout
-        run: |
-          cat <<'EOF' > app/src/main/res/layout/activity_main.xml
+          # ✅ Layout
+          cat <<EOF > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
@@ -143,24 +108,22 @@ jobs:
               android:orientation="vertical"
               android:background="#FFFFFF">
               <TextView
-                  android:id="@+id/tvHello"
                   android:layout_width="wrap_content"
                   android:layout_height="wrap_content"
-                  android:text="Hello World!"
+                  android:text="$APP_NAME"
                   android:textSize="28sp"
                   android:textColor="#000000"
                   android:textStyle="bold"/>
           </LinearLayout>
           EOF
-
-      - name: Create AndroidManifest
-        run: |
-          cat <<'EOF' > app/src/main/AndroidManifest.xml
+          
+          # ✅ AndroidManifest (NO package attribute)
+          cat <<EOF > app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
-                  android:label="APP_NAME_PLACEHOLDER"
+                  android:label="$APP_NAME"
                   android:roundIcon="@mipmap/ic_launcher_round"
                   android:supportsRtl="true"
                   android:theme="@style/Theme.App">
@@ -175,13 +138,11 @@ jobs:
               </application>
           </manifest>
           EOF
-          
-          sed -i "s|APP_NAME_PLACEHOLDER|$APP_NAME|g" app/src/main/AndroidManifest.xml
 
       - name: Create Resources
         run: |
-          # themes.xml - SIMPLE theme without Material Components
-          cat <<'EOF' > app/src/main/res/values/themes.xml
+          # ✅ Simple theme
+          cat <<EOF > app/src/main/res/values/themes.xml
           <resources>
               <style name="Theme.App" parent="Theme.AppCompat.Light.NoActionBar">
                   <item name="colorPrimary">#6200EE</item>
@@ -190,56 +151,70 @@ jobs:
           </resources>
           EOF
           
-          # strings.xml
-          cat <<'EOF' > app/src/main/res/values/strings.xml
+          # ✅ Strings
+          cat <<EOF > app/src/main/res/values/strings.xml
           <resources>
-              <string name="app_name">APP_NAME_PLACEHOLDER</string>
+              <string name="app_name">$APP_NAME</string>
           </resources>
           EOF
-          sed -i "s|APP_NAME_PLACEHOLDER|$APP_NAME|g" app/src/main/res/values/strings.xml
           
-          # colors.xml
-          cat <<'EOF' > app/src/main/res/values/colors.xml
+          # ✅ Colors
+          cat <<EOF > app/src/main/res/values/colors.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <color name="colorPrimary">#6200EE</color>
               <color name="white">#FFFFFF</color>
-              <color name="black">#000000</color>
           </resources>
           EOF
 
+      - name: Handle Custom Icon
+        run: |
+          if [ -f extracted_payload/app_icon.png ]; then
+            echo "✅ Custom icon found"
+            for dir in app/src/main/res/mipmap-*/; do
+              cp extracted_payload/app_icon.png "\${dir}ic_launcher.png"
+              cp extracted_payload/app_icon.png "\${dir}ic_launcher_round.png"
+            done
+          else
+            echo "ℹ️ Using default icon"
+            # ✅ Create simple PNG icons using ImageMagick
+            sudo apt-get update
+            sudo apt-get install -y imagemagick
+            for size in 72 96 144 192; do
+              convert -size ${size}x${size} xc:#6200EE \
+                -gravity center -pointsize $((size/3)) -fill white -annotate 0 "A" \
+                app/src/main/res/mipmap-hdpi/ic_launcher.png 2>/dev/null || true
+            done
+            # Copy to all densities
+            for dir in app/src/main/res/mipmap-*/; do
+              cp app/src/main/res/mipmap-hdpi/ic_launcher.png "\${dir}ic_launcher.png" 2>/dev/null || true
+              cp app/src/main/res/mipmap-hdpi/ic_launcher.png "\${dir}ic_launcher_round.png" 2>/dev/null || true
+            done
+          fi
+
       - name: Setup Gradle
         run: |
-          cat <<'EOF' > settings.gradle
+          cat <<EOF > settings.gradle
           pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
+              repositories { google(); mavenCentral(); gradlePluginPortal() }
           }
           dependencyResolutionManagement {
               repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
+              repositories { google(); mavenCentral() }
           }
           rootProject.name = "SystemPro"
           include ":app"
           EOF
           
-          cat <<'EOF' > app/build.gradle
-          plugins {
-              id 'com.android.application'
-          }
+          cat <<EOF > app/build.gradle
+          plugins { id 'com.android.application' }
           
           android {
-              namespace 'TARGET_PACKAGE_PLACEHOLDER'
+              namespace '$TARGET_PACKAGE'
               compileSdk 34
               
               defaultConfig {
-                  applicationId 'TARGET_PACKAGE_PLACEHOLDER'
+                  applicationId '$TARGET_PACKAGE'
                   minSdk 21
                   targetSdk 34
                   versionCode 1
@@ -256,17 +231,9 @@ jobs:
               implementation 'androidx.appcompat:appcompat:1.6.1'
           }
           EOF
-          
-          sed -i "s|TARGET_PACKAGE_PLACEHOLDER|$TARGET_PACKAGE|g" app/build.gradle
-
-      - name: Show Project Structure
-        run: |
-          echo "📂 Project Structure:"
-          find app/src/main -type f | sort
 
       - name: Build APK
         run: |
-          echo "🔨 Building APK..."
           gradle wrapper --gradle-version 8.5
           chmod +x gradlew
           ./gradlew assembleDebug
