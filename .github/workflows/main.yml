@@ -1,121 +1,35 @@
-name: System Pro Titan Master Build
-
-on:
-  repository_dispatch:
-    types: [trigger_b64_build]
-  workflow_dispatch:
-    inputs:
-      package_name:
-        description: 'Package Name'
-        required: true
-        default: 'com.example.app'
-        type: string
-      app_name:
-        description: 'App Name'
-        required: true
-        default: 'MyApp'
-        type: string
-      payload:
-        description: 'Base64 Encoded Payload'
-        required: false
-        type: string
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Setup Java JDK
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '17'
-
-      - name: Setup Environment
-        run: |
-          if [ -n "${{ github.event.client_payload.package_name }}" ]; then
-            echo "TARGET_PACKAGE=${{ github.event.client_payload.package_name }}" >> $GITHUB_ENV
-            echo "APP_NAME=${{ github.event.client_payload.app_name }}" >> $GITHUB_ENV
-            echo "PAYLOAD_DATA=${{ github.event.client_payload.payload }}" >> $GITHUB_ENV
-          elif [ -n "${{ github.event.inputs.package_name }}" ]; then
-            echo "TARGET_PACKAGE=${{ github.event.inputs.package_name }}" >> $GITHUB_ENV
-            echo "APP_NAME=${{ github.event.inputs.app_name }}" >> $GITHUB_ENV
-            echo "PAYLOAD_DATA=${{ github.event.inputs.payload }}" >> $GITHUB_ENV
-          else
-            echo "ERROR: No package_name provided"
-            exit 1
-          fi
-
-      - name: Clean and Create Structure
-        run: |
-          rm -rf app/src/main/java/*
-          rm -rf app/src/main/res/*
-          rm -rf gradle/wrapper/
-          mkdir -p app/src/main/java
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/drawable
-          mkdir -p extracted_payload
-
-      - name: Process Payload
-        run: |
-          if [ -n "$PAYLOAD_DATA" ]; then
-            echo "$PAYLOAD_DATA" > payload_b64.txt
-            base64 -d payload_b64.txt > payload.zip 2>/dev/null || true
-            unzip -o payload.zip -d extracted_payload/ 2>/dev/null || true
-          fi
-
-      - name: Create MainActivity and Resources
-        run: |
-          PKG_PATH=$(echo "$TARGET_PACKAGE" | tr '.' '/')
-          mkdir -p "app/src/main/java/$PKG_PATH"
-          
-          # MainActivity
-          cat <<EOF > "app/src/main/java/$PKG_PATH/MainActivity.java"
-          package $TARGET_PACKAGE;
-          import android.os.Bundle;
-          import androidx.appcompat.app.AppCompatActivity;
-          public class MainActivity extends AppCompatActivity {
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  setContentView(R.layout.activity_main);
-              }
-          }
-          EOF
-
-          # Layout
-          cat <<EOF > app/src/main/res/layout/activity_main.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:gravity="center"
-              android:orientation="vertical">
-              <TextView
-                  android:id="@+id/tvHello"
-                  android:layout_width="wrap_content"
-                  android:layout_height="wrap_content"
-                  android:text="$APP_NAME"
-                  android:textSize="20sp"/>
-          </LinearLayout>
-          EOF
-
       - name: Create Build Files
         run: |
+          # 1. settings.gradle میں پلگ ان ریپوزٹریز کا ہونا ضروری ہے
           cat <<EOF > settings.gradle
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
           rootProject.name = "SystemPro"
           include ":app"
           EOF
           
+          # 2. app/build.gradle میں پلگ ان کا ورژن بتائیں
           cat <<EOF > app/build.gradle
-          plugins { id 'com.android.application' }
+          plugins {
+              id 'com.android.application' version '8.2.2'
+          }
+          
           android {
               namespace '$TARGET_PACKAGE'
               compileSdk 34
+              
               defaultConfig {
                   applicationId '$TARGET_PACKAGE'
                   minSdk 21
@@ -123,25 +37,14 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
+              
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
               }
           }
+          
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
           }
           EOF
-
-      - name: Build APK
-        run: |
-          # گریڈل ورژن 8.5 کو زبردستی لاک کرنا
-          gradle wrapper --gradle-version 8.5 --gradle-distribution-checksum-verification=off
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.APP_NAME }}-App
-          path: app/build/outputs/apk/debug/app-debug.apk
