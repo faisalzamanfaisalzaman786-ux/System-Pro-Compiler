@@ -98,28 +98,21 @@ jobs:
           PKG_PATH=$(echo "$TARGET_PACKAGE" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH"
           
-          # Create a clean, correct MainActivity.java
-          cat > "app/src/main/java/$PKG_PATH/MainActivity.java" << EOF
-package $TARGET_PACKAGE;
-
-import android.os.Bundle;
-import android.widget.TextView;
-import androidx.appcompat.app.AppCompatActivity;
-
-public class MainActivity extends AppCompatActivity {
-
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-        
-        TextView textView = findViewById(R.id.tvHello);
-        if (textView != null) {
-            textView.setText("$APP_NAME");
-        }
-    }
-}
-EOF
+          echo 'package '"$TARGET_PACKAGE"';' > "app/src/main/java/$PKG_PATH/MainActivity.java"
+          echo '' >> "app/src/main/java/$PKG_PATH/MainActivity.java"
+          echo 'import android.os.Bundle;' >> "app/src/main/java/$PKG_PATH/MainActivity.java"
+          echo 'import android.widget.TextView;' >> "app/src/main/java/$PKG_PATH/MainActivity.java"
+          echo 'import androidx.appcompat.app.AppCompatActivity;' >> "app/src/main/java/$PKG_PATH/MainActivity.java"
+          echo '' >> "app/src/main/java/$PKG_PATH/MainActivity.java"
+          echo 'public class MainActivity extends AppCompatActivity {' >> "app/src/main/java/$PKG_PATH/MainActivity.java"
+          echo '' >> "app/src/main/java/$PKG_PATH/MainActivity.java"
+          echo '    @Override' >> "app/src/main/java/$PKG_PATH/MainActivity.java"
+          echo '    protected void onCreate(Bundle savedInstanceState) {' >> "app/src/main/java/$PKG_PATH/MainActivity.java"
+          echo '        super.onCreate(savedInstanceState);' >> "app/src/main/java/$PKG_PATH/MainActivity.java"
+          echo '        setContentView(R.layout.activity_main);' >> "app/src/main/java/$PKG_PATH/MainActivity.java"
+          echo '    }' >> "app/src/main/java/$PKG_PATH/MainActivity.java"
+          echo '}' >> "app/src/main/java/$PKG_PATH/MainActivity.java"
+          
           echo "Created clean MainActivity.java"
 
       - name: Create Default Colors
@@ -162,7 +155,7 @@ EOF
             echo '        android:id="@+id/tvHello"' >> app/src/main/res/layout/activity_main.xml
             echo '        android:layout_width="wrap_content"' >> app/src/main/res/layout/activity_main.xml
             echo '        android:layout_height="wrap_content"' >> app/src/main/res/layout/activity_main.xml
-            echo '        android:text="'$APP_NAME'"' >> app/src/main/res/layout/activity_main.xml
+            echo '        android:text="'"$APP_NAME"'"' >> app/src/main/res/layout/activity_main.xml
             echo '        android:textSize="28sp"' >> app/src/main/res/layout/activity_main.xml
             echo '        android:textColor="@color/text_primary"' >> app/src/main/res/layout/activity_main.xml
             echo '        android:textStyle="bold"/>' >> app/src/main/res/layout/activity_main.xml
