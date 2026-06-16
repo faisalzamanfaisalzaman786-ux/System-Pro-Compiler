@@ -73,18 +73,33 @@ jobs:
             ls -la extracted_payload/
           fi
 
-      - name: Create App Files
+      - name: Create MainActivity from Payload OR Default
         run: |
           PKG_PATH=$(echo "$TARGET_PACKAGE" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH"
           
-          # ✅ MainActivity with FULL import
-          cat <<EOF > "app/src/main/java/$PKG_PATH/MainActivity.java"
+          # Check if Java file exists in payload
+          if [ -f extracted_payload/java/com/example/helloworld/MainActivity.java ]; then
+            echo "📄 Using MainActivity from payload"
+            # Copy and fix the file
+            cp extracted_payload/java/com/example/helloworld/MainActivity.java "app/src/main/java/$PKG_PATH/MainActivity.java"
+            
+            # 🔥 FIX: Remove package line and add correct one
+            sed -i "1s/.*/package $TARGET_PACKAGE;/" "app/src/main/java/$PKG_PATH/MainActivity.java"
+            
+            # 🔥 FIX: Add import for R if not exists
+            if ! grep -q "import.*R;" "app/src/main/java/$PKG_PATH/MainActivity.java"; then
+              sed -i "3iimport $TARGET_PACKAGE.R;" "app/src/main/java/$PKG_PATH/MainActivity.java"
+            fi
+          else
+            echo "📄 Creating default MainActivity"
+            cat <<EOF > "app/src/main/java/$PKG_PATH/MainActivity.java"
           package $TARGET_PACKAGE;
           
           import android.os.Bundle;
           import android.widget.TextView;
           import androidx.appcompat.app.AppCompatActivity;
+          import $TARGET_PACKAGE.R;
           
           public class MainActivity extends AppCompatActivity {
               @Override
@@ -99,9 +114,19 @@ jobs:
               }
           }
           EOF
+          fi
           
-          # ✅ Layout with ID
-          cat <<EOF > app/src/main/res/layout/activity_main.xml
+          echo "📄 MainActivity.java:"
+          cat "app/src/main/java/$PKG_PATH/MainActivity.java"
+
+      - name: Create Layout
+        run: |
+          # Check if layout exists in payload
+          if [ -f extracted_payload/res/layout/activity_main.xml ]; then
+            cp extracted_payload/res/layout/activity_main.xml app/src/main/res/layout/activity_main.xml
+            echo "✅ Layout copied from payload"
+          else
+            cat <<EOF > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
@@ -119,9 +144,19 @@ jobs:
                   android:textStyle="bold"/>
           </LinearLayout>
           EOF
-          
-          # ✅ AndroidManifest
-          cat <<EOF > app/src/main/AndroidManifest.xml
+            echo "✅ Created default layout"
+          fi
+
+      - name: Create AndroidManifest
+        run: |
+          # Check if manifest exists in payload
+          if [ -f extracted_payload/AndroidManifest.xml ]; then
+            cp extracted_payload/AndroidManifest.xml app/src/main/AndroidManifest.xml
+            echo "✅ Manifest copied from payload"
+            # Remove package attribute if exists
+            sed -i 's/package="[^"]*"//g' app/src/main/AndroidManifest.xml
+          else
+            cat <<EOF > app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application
                   android:allowBackup="true"
@@ -138,10 +173,14 @@ jobs:
               </application>
           </manifest>
           EOF
+            echo "✅ Created default manifest"
+          fi
+          
+          # Override app name
+          sed -i "s|android:label=\"[^\"]*\"|android:label=\"$APP_NAME\"|g" app/src/main/AndroidManifest.xml
 
       - name: Create Resources
         run: |
-          # ✅ Theme
           cat <<EOF > app/src/main/res/values/themes.xml
           <resources>
               <style name="Theme.App" parent="Theme.AppCompat.Light.NoActionBar">
@@ -151,14 +190,12 @@ jobs:
           </resources>
           EOF
           
-          # ✅ Strings
           cat <<EOF > app/src/main/res/values/strings.xml
           <resources>
               <string name="app_name">$APP_NAME</string>
           </resources>
           EOF
           
-          # ✅ Colors
           cat <<EOF > app/src/main/res/values/colors.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -168,64 +205,30 @@ jobs:
           </resources>
           EOF
 
-      - name: Copy Payload Files
+      - name: Copy Custom Icon
         run: |
-          # Copy layout if exists
-          if [ -f extracted_payload/res/layout/activity_main.xml ]; then
-            cp extracted_payload/res/layout/activity_main.xml app/src/main/res/layout/activity_main.xml
-            echo "✅ Layout copied from payload"
-          fi
-          
-          # Copy Java files if exists
-          if [ -d extracted_payload/java ]; then
-            PKG_PATH=$(echo "$TARGET_PACKAGE" | tr '.' '/')
-            find extracted_payload/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
-            echo "✅ Java files copied from payload"
-          fi
-          
-          # Copy custom icon if exists
           if [ -f extracted_payload/app_icon.png ]; then
+            mkdir -p app/src/main/res/drawable
             cp extracted_payload/app_icon.png app/src/main/res/drawable/ic_launcher.png
-            echo "✅ Icon copied from payload"
+            echo "✅ Custom icon copied"
           fi
-
-      - name: Show Project Structure
-        run: |
-          echo "📂 Project Structure:"
-          find app/src/main -type f | sort
-          echo ""
-          echo "📄 MainActivity.java:"
-          PKG_PATH=$(echo "$TARGET_PACKAGE" | tr '.' '/')
-          cat "app/src/main/java/$PKG_PATH/MainActivity.java"
-          echo ""
-          echo "📄 AndroidManifest.xml:"
-          cat app/src/main/AndroidManifest.xml
 
       - name: Setup Gradle
         run: |
           cat <<EOF > settings.gradle
           pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
+              repositories { google(); mavenCentral(); gradlePluginPortal() }
           }
           dependencyResolutionManagement {
               repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
+              repositories { google(); mavenCentral() }
           }
           rootProject.name = "SystemPro"
           include ":app"
           EOF
           
           cat <<EOF > app/build.gradle
-          plugins {
-              id 'com.android.application'
-          }
+          plugins { id 'com.android.application' }
           
           android {
               namespace '$TARGET_PACKAGE'
