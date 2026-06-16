@@ -60,11 +60,7 @@ jobs:
           mkdir -p app/src/main/java
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/mipmap-hdpi
-          mkdir -p app/src/main/res/mipmap-mdpi
-          mkdir -p app/src/main/res/mipmap-xhdpi
-          mkdir -p app/src/main/res/mipmap-xxhdpi
-          mkdir -p app/src/main/res/mipmap-xxxhdpi
+          mkdir -p app/src/main/res/mipmap
           mkdir -p extracted_payload
 
       - name: Process Payload (if any)
@@ -76,7 +72,7 @@ jobs:
             echo "✅ Payload processed"
           fi
 
-      - name: Create Simple App Files
+      - name: Create App Files
         run: |
           PKG_PATH=$(echo "$TARGET_PACKAGE" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH"
@@ -117,15 +113,12 @@ jobs:
           </LinearLayout>
           EOF
           
-          # ✅ AndroidManifest (NO package attribute)
+          # ✅ AndroidManifest
           cat <<EOF > app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application
                   android:allowBackup="true"
-                  android:icon="@mipmap/ic_launcher"
                   android:label="$APP_NAME"
-                  android:roundIcon="@mipmap/ic_launcher_round"
-                  android:supportsRtl="true"
                   android:theme="@style/Theme.App">
                   <activity
                       android:name=".MainActivity"
@@ -141,7 +134,7 @@ jobs:
 
       - name: Create Resources
         run: |
-          # ✅ Simple theme
+          # ✅ Theme
           cat <<EOF > app/src/main/res/values/themes.xml
           <resources>
               <style name="Theme.App" parent="Theme.AppCompat.Light.NoActionBar">
@@ -167,29 +160,19 @@ jobs:
           </resources>
           EOF
 
-      - name: Handle Custom Icon
+      - name: Copy Payload Files
         run: |
-          if [ -f extracted_payload/app_icon.png ]; then
-            echo "✅ Custom icon found"
-            for dir in app/src/main/res/mipmap-*/; do
-              cp extracted_payload/app_icon.png "\${dir}ic_launcher.png"
-              cp extracted_payload/app_icon.png "\${dir}ic_launcher_round.png"
-            done
-          else
-            echo "ℹ️ Using default icon"
-            # ✅ Create simple PNG icons using ImageMagick
-            sudo apt-get update
-            sudo apt-get install -y imagemagick
-            for size in 72 96 144 192; do
-              convert -size ${size}x${size} xc:#6200EE \
-                -gravity center -pointsize $((size/3)) -fill white -annotate 0 "A" \
-                app/src/main/res/mipmap-hdpi/ic_launcher.png 2>/dev/null || true
-            done
-            # Copy to all densities
-            for dir in app/src/main/res/mipmap-*/; do
-              cp app/src/main/res/mipmap-hdpi/ic_launcher.png "\${dir}ic_launcher.png" 2>/dev/null || true
-              cp app/src/main/res/mipmap-hdpi/ic_launcher.png "\${dir}ic_launcher_round.png" 2>/dev/null || true
-            done
+          # Copy layout if exists
+          if [ -f extracted_payload/res/layout/activity_main.xml ]; then
+            cp extracted_payload/res/layout/activity_main.xml app/src/main/res/layout/activity_main.xml
+            echo "✅ Layout copied"
+          fi
+          
+          # Copy Java files if exists
+          if [ -d extracted_payload/java ]; then
+            PKG_PATH=$(echo "$TARGET_PACKAGE" | tr '.' '/')
+            find extracted_payload/java -name "*.java" -exec cp {} "app/src/main/java/$PKG_PATH/" \;
+            echo "✅ Java files copied"
           fi
 
       - name: Setup Gradle
