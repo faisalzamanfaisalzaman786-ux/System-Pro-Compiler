@@ -65,8 +65,6 @@ jobs:
             base64 -d payload_b64.txt > payload.zip 2>/dev/null || { echo "Invalid base64 payload"; exit 1; }
             unzip -o payload.zip -d extracted_payload/ || true
             echo "Payload extracted successfully"
-          else
-            echo "No payload provided"
           fi
 
       - name: Copy AndroidManifest
@@ -81,7 +79,6 @@ jobs:
       - name: Clean Old Java Files
         run: |
           rm -rf app/src/main/java/com
-          rm -rf app/src/main/java/org
           rm -rf app/src/main/java/*
 
       - name: Copy Java Files
@@ -104,25 +101,15 @@ jobs:
           for file in app/src/main/java/$PKG_PATH/*.java; do
             if [ -f "$file" ]; then
               sed -i "s/^package .*;/package $TARGET_PACKAGE;/g" "$file"
-              echo "Updated package in: $(basename $file)"
             fi
           done
 
       - name: Copy Layout and Resources
         run: |
-          if [ -d extracted_payload/res/layout ]; then
-            cp -r extracted_payload/res/layout/* app/src/main/res/layout/ 2>/dev/null
-          fi
-          if [ -d extracted_payload/res/values ]; then
-            cp -r extracted_payload/res/values/* app/src/main/res/values/ 2>/dev/null
-          fi
-          if [ -d extracted_payload/res/drawable ]; then
-            cp -r extracted_payload/res/drawable/* app/src/main/res/drawable/ 2>/dev/null
-          fi
-          if [ -d extracted_payload/res/xml ]; then
-            cp -r extracted_payload/res/xml/* app/src/main/res/xml/ 2>/dev/null
-          fi
-          echo "Resources copied"
+          [ -d extracted_payload/res/layout ] && cp -r extracted_payload/res/layout/* app/src/main/res/layout/ 2>/dev/null
+          [ -d extracted_payload/res/values ] && cp -r extracted_payload/res/values/* app/src/main/res/values/ 2>/dev/null
+          [ -d extracted_payload/res/drawable ] && cp -r extracted_payload/res/drawable/* app/src/main/res/drawable/ 2>/dev/null
+          [ -d extracted_payload/res/xml ] && cp -r extracted_payload/res/xml/* app/src/main/res/xml/ 2>/dev/null
 
       - name: Create Default Colors
         run: |
@@ -131,15 +118,9 @@ jobs:
             echo '<resources>' >> app/src/main/res/values/colors.xml
             echo '    <color name="background">#FFFFFFFF</color>' >> app/src/main/res/values/colors.xml
             echo '    <color name="text_primary">#FF000000</color>' >> app/src/main/res/values/colors.xml
-            echo '    <color name="text_secondary">#FF666666</color>' >> app/src/main/res/values/colors.xml
-            echo '    <color name="background_dark">#FF121212</color>' >> app/src/main/res/values/colors.xml
-            echo '    <color name="text_primary_dark">#FFFFFFFF</color>' >> app/src/main/res/values/colors.xml
-            echo '    <color name="primary">#FF6200EE</color>' >> app/src/main/res/values/colors.xml
-            echo '    <color name="accent">#FF03DAC5</color>' >> app/src/main/res/values/colors.xml
             echo '    <color name="white">#FFFFFFFF</color>' >> app/src/main/res/values/colors.xml
             echo '    <color name="black">#FF000000</color>' >> app/src/main/res/values/colors.xml
             echo '</resources>' >> app/src/main/res/values/colors.xml
-            echo "Default colors.xml created"
           fi
 
       - name: Create Default Themes
@@ -152,11 +133,8 @@ jobs:
             echo '        <item name="android:textColorPrimary">@color/text_primary</item>' >> app/src/main/res/values/themes.xml
             echo '        <item name="windowNoTitle">true</item>' >> app/src/main/res/values/themes.xml
             echo '        <item name="windowActionBar">false</item>' >> app/src/main/res/values/themes.xml
-            echo '        <item name="colorPrimary">@color/primary</item>' >> app/src/main/res/values/themes.xml
-            echo '        <item name="colorAccent">@color/accent</item>' >> app/src/main/res/values/themes.xml
             echo '    </style>' >> app/src/main/res/values/themes.xml
             echo '</resources>' >> app/src/main/res/values/themes.xml
-            echo "Default themes.xml created"
           fi
 
       - name: Create Default Layout
@@ -169,7 +147,6 @@ jobs:
             echo '    android:gravity="center"' >> app/src/main/res/layout/activity_main.xml
             echo '    android:orientation="vertical"' >> app/src/main/res/layout/activity_main.xml
             echo '    android:background="@color/background">' >> app/src/main/res/layout/activity_main.xml
-            echo '' >> app/src/main/res/layout/activity_main.xml
             echo '    <TextView' >> app/src/main/res/layout/activity_main.xml
             echo '        android:id="@+id/tvHello"' >> app/src/main/res/layout/activity_main.xml
             echo '        android:layout_width="wrap_content"' >> app/src/main/res/layout/activity_main.xml
@@ -178,10 +155,8 @@ jobs:
             echo '        android:textSize="28sp"' >> app/src/main/res/layout/activity_main.xml
             echo '        android:textColor="@color/text_primary"' >> app/src/main/res/layout/activity_main.xml
             echo '        android:textStyle="bold"/>' >> app/src/main/res/layout/activity_main.xml
-            echo '' >> app/src/main/res/layout/activity_main.xml
             echo '</LinearLayout>' >> app/src/main/res/layout/activity_main.xml
             sed -i "s/\$APP_NAME/$APP_NAME/g" app/src/main/res/layout/activity_main.xml
-            echo "Default layout created"
           fi
 
       - name: Copy App Icon
@@ -191,13 +166,11 @@ jobs:
               cp extracted_payload/app_icon.png app/src/main/res/mipmap-$size/ic_launcher.png
               cp extracted_payload/app_icon.png app/src/main/res/mipmap-$size/ic_launcher_round.png
             done
-            echo "App icon copied"
           fi
 
       - name: Update Manifest Label
         run: |
           sed -i "s/android:label=\"[^\"]*\"/android:label=\"$APP_NAME\"/g" app/src/main/AndroidManifest.xml
-          echo "Updated app label to: $APP_NAME"
 
       - name: Generate Gradle Files
         run: |
@@ -247,35 +220,18 @@ jobs:
           gradle wrapper --gradle-version=8.5 --distribution-type=bin --no-daemon
           chmod +x gradlew
 
-      - name: Fix and Build APK (R Class Fix)
+      - name: Build APK
         run: |
           chmod +x gradlew
-          
-          # Step 1: Full clean
-          echo "Performing full clean..."
           ./gradlew clean --no-daemon
           rm -rf app/build
           rm -rf .gradle
-          rm -rf ~/.gradle/caches/transforms-* 2>/dev/null || true
-          
-          # Step 2: Generate R class first
-          echo "Generating R class first..."
-          ./gradlew :app:processDebugResources --no-daemon
-          ./gradlew :app:generateDebugRFile --no-daemon || true
-          
-          # Step 3: Verify R class was generated
-          echo "Verifying R class generation..."
-          find app/build/generated -name "R.java" 2>/dev/null || echo "R.java will be generated during build"
-          
-          # Step 4: Build APK
-          echo "Building APK..."
           ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
       - name: Verify APK
         run: |
           if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
-            APK_SIZE=$(du -h app/build/outputs/apk/debug/app-debug.apk | cut -f1)
-            echo "✅ APK built successfully! Size: $APK_SIZE"
+            echo "✅ APK built successfully!"
           else
             echo "❌ APK not found"
             exit 1
@@ -294,8 +250,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Build-Error-Logs
-          path: |
-            app/build/reports/
-            app/build/generated/
+          path: app/build/reports/
           retention-days: 3
           if-no-files-found: ignore
