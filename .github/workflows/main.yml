@@ -89,42 +89,26 @@ jobs:
           [ -d extracted_payload/res/drawable ] && cp -rn extracted_payload/res/drawable/* app/src/main/res/drawable/ 2>/dev/null || true
           [ -f extracted_payload/AndroidManifest.xml ] && cp extracted_payload/AndroidManifest.xml app/src/main/AndroidManifest.xml || true
 
-      - name: Fix Manifest Theme
-        run: |
-          sed -i 's/Theme.AppCompat.NoActionBar/Theme.MaterialComponents.DayNight.NoActionBar/g' app/src/main/AndroidManifest.xml
-          echo "Theme updated successfully"
-
       - name: Generate Gradle Files
         run: |
           cat <<EOF > settings.gradle
           pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
+              repositories { google(); mavenCentral(); gradlePluginPortal() }
           }
           dependencyResolutionManagement {
               repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
+              repositories { google(); mavenCentral() }
           }
           rootProject.name = "SystemPro"
           include ":app"
           EOF
           
           cat <<EOF > build.gradle
-          plugins {
-              id 'com.android.application' version '8.2.2' apply false
-          }
+          plugins { id 'com.android.application' version '8.2.2' apply false }
           EOF
           
           cat <<EOF > app/build.gradle
-          plugins {
-              id 'com.android.application'
-          }
+          plugins { id 'com.android.application' }
           android {
               namespace '$TARGET_PACKAGE'
               compileSdk 34
@@ -134,6 +118,24 @@ jobs:
                   targetSdk 34
               }
           }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+          }
+          EOF
+          
+          mkdir -p app/src/main/res/values
+          cat <<EOF > app/src/main/res/values/themes.xml
+          <resources>
+              <style name="Theme.MaterialComponents.DayNight.NoActionBar" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+                  <item name="colorPrimary">#6200EE</item>
+                  <item name="colorPrimaryDark">#3700B3</item>
+                  <item name="colorAccent">#03DAC5</item>
+              </style>
+              <style name="Theme.AppCompat.Light.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar">
+                  <item name="colorPrimary">#6200EE</item>
+              </style>
+          </resources>
           EOF
 
       - name: Setup Gradle Wrapper and Build
