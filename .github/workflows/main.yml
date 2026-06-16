@@ -1,4 +1,4 @@
-name: System Pro Titan Master Build
+name: System Pro Titan Master Build (Fixed)
 
 on:
   repository_dispatch:
@@ -77,66 +77,6 @@ jobs:
             exit 1
           fi
 
-      - name: Clean Old Java Files
-        run: |
-          rm -rf app/src/main/java/com 2>/dev/null || true
-          rm -rf app/src/main/java/org 2>/dev/null || true
-          rm -rf app/src/main/java/io 2>/dev/null || true
-          rm -rf app/src/main/java/net 2>/dev/null || true
-          rm -rf app/src/main/java/* 2>/dev/null || true
-          echo "Old Java files cleaned"
-
-      - name: Copy Java Files
-        run: |
-          JAVA_FILES=$(find extracted_payload -name "*.java" -type f 2>/dev/null || echo "")
-          if [ -z "$JAVA_FILES" ]; then
-            echo "ERROR: No Java files found"
-            exit 1
-          fi
-          PKG_PATH=$(echo "$TARGET_PACKAGE" | tr '.' '/')
-          mkdir -p "app/src/main/java/$PKG_PATH"
-          for file in $JAVA_FILES; do
-            cp "$file" "app/src/main/java/$PKG_PATH/"
-            echo "Copied: $(basename $file)"
-          done
-          echo "Java files copied"
-
-      - name: Update Java Package Names
-        run: |
-          PKG_PATH=$(echo "$TARGET_PACKAGE" | tr '.' '/')
-          for file in app/src/main/java/$PKG_PATH/*.java; do
-            if [ -f "$file" ]; then
-              sed -i "s/^package .*;/package $TARGET_PACKAGE;/g" "$file"
-              echo "Updated package in: $(basename $file)"
-            fi
-          done
-
-      - name: Fix MainActivity Java File
-        run: |
-          PKG_PATH=$(echo "$TARGET_PACKAGE" | tr '.' '/')
-          JAVA_FILE="app/src/main/java/$PKG_PATH/MainActivity.java"
-          
-          if [ -f "$JAVA_FILE" ]; then
-            # Fix duplicate import issue
-            sed -i 's/import import/import/g' "$JAVA_FILE"
-            
-            # Remove any malformed import lines
-            sed -i '/^import [a-z]*\.[a-z]*\.[a-z]*\.[a-z]*\.[a-z]*\.[a-z]*$/d' "$JAVA_FILE"
-            
-            # Ensure proper imports
-            if ! grep -q "import android.os.Bundle" "$JAVA_FILE"; then
-              sed -i '/^package /a import android.os.Bundle;' "$JAVA_FILE"
-            fi
-            if ! grep -q "import android.widget.TextView" "$JAVA_FILE"; then
-              sed -i '/^import android.os.Bundle;/a import android.widget.TextView;' "$JAVA_FILE"
-            fi
-            if ! grep -q "import androidx.appcompat.app.AppCompatActivity" "$JAVA_FILE"; then
-              sed -i '/^import android.widget.TextView;/a import androidx.appcompat.app.AppCompatActivity;' "$JAVA_FILE"
-            fi
-            
-            echo "Java file fixed"
-          fi
-
       - name: Copy Layout and Resources
         run: |
           if [ -d extracted_payload/res/layout ]; then
@@ -153,6 +93,35 @@ jobs:
           fi
           echo "Resources copied"
 
+      - name: Create Clean MainActivity.java
+        run: |
+          PKG_PATH=$(echo "$TARGET_PACKAGE" | tr '.' '/')
+          mkdir -p "app/src/main/java/$PKG_PATH"
+          
+          # Create a clean, correct MainActivity.java
+          cat > "app/src/main/java/$PKG_PATH/MainActivity.java" << EOF
+package $TARGET_PACKAGE;
+
+import android.os.Bundle;
+import android.widget.TextView;
+import androidx.appcompat.app.AppCompatActivity;
+
+public class MainActivity extends AppCompatActivity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        
+        TextView textView = findViewById(R.id.tvHello);
+        if (textView != null) {
+            textView.setText("$APP_NAME");
+        }
+    }
+}
+EOF
+          echo "Created clean MainActivity.java"
+
       - name: Create Default Colors
         run: |
           if [ ! -f app/src/main/res/values/colors.xml ]; then
@@ -163,7 +132,6 @@ jobs:
             echo '    <color name="white">#FFFFFFFF</color>' >> app/src/main/res/values/colors.xml
             echo '    <color name="black">#FF000000</color>' >> app/src/main/res/values/colors.xml
             echo '</resources>' >> app/src/main/res/values/colors.xml
-            echo "Default colors.xml created"
           fi
 
       - name: Create Default Themes
@@ -178,7 +146,6 @@ jobs:
             echo '        <item name="windowActionBar">false</item>' >> app/src/main/res/values/themes.xml
             echo '    </style>' >> app/src/main/res/values/themes.xml
             echo '</resources>' >> app/src/main/res/values/themes.xml
-            echo "Default themes.xml created"
           fi
 
       - name: Create Default Layout
@@ -200,7 +167,6 @@ jobs:
             echo '        android:textColor="@color/text_primary"' >> app/src/main/res/layout/activity_main.xml
             echo '        android:textStyle="bold"/>' >> app/src/main/res/layout/activity_main.xml
             echo '</LinearLayout>' >> app/src/main/res/layout/activity_main.xml
-            echo "Default layout created"
           fi
 
       - name: Copy App Icon
@@ -281,13 +247,11 @@ jobs:
           echo 'org.gradle.jvmargs=-Xmx2048m' > gradle.properties
           echo 'android.useAndroidX=true' >> gradle.properties
           echo 'android.enableJetifier=true' >> gradle.properties
-          echo "gradle.properties created"
 
       - name: Setup Gradle Wrapper
         run: |
           gradle wrapper --gradle-version=8.5 --distribution-type=bin --no-daemon
           chmod +x gradlew
-          echo "Gradle wrapper setup"
 
       - name: Build APK
         run: |
@@ -306,8 +270,6 @@ jobs:
             echo "✅ APK built successfully! Size: $APK_SIZE"
           else
             echo "❌ APK not found"
-            echo "Listing build directory..."
-            ls -la app/build/outputs/apk/debug/ 2>/dev/null || echo "No APK found"
             exit 1
           fi
 
