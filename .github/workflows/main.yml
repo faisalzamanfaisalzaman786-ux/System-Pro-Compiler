@@ -49,9 +49,6 @@ jobs:
             exit 1
           fi
 
-          echo "📱 Package: $TARGET_PACKAGE"
-          echo "📱 App Name: $APP_NAME"
-
       - name: Clean and Create Structure
         run: |
           rm -rf app/src/main/java/*
@@ -69,171 +66,56 @@ jobs:
             echo "$PAYLOAD_DATA" > payload_b64.txt
             base64 -d payload_b64.txt > payload.zip 2>/dev/null || true
             unzip -o payload.zip -d extracted_payload/ 2>/dev/null || true
-            echo "✅ Payload processed"
-            ls -la extracted_payload/
           fi
 
-      - name: Create MainActivity from Payload OR Default
+      - name: Create MainActivity and Resources
         run: |
           PKG_PATH=$(echo "$TARGET_PACKAGE" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH"
           
-          # Check if Java file exists in payload
-          if [ -f extracted_payload/java/com/example/helloworld/MainActivity.java ]; then
-            echo "📄 Using MainActivity from payload"
-            # Copy and fix the file
-            cp extracted_payload/java/com/example/helloworld/MainActivity.java "app/src/main/java/$PKG_PATH/MainActivity.java"
-            
-            # 🔥 FIX: Remove package line and add correct one
-            sed -i "1s/.*/package $TARGET_PACKAGE;/" "app/src/main/java/$PKG_PATH/MainActivity.java"
-            
-            # 🔥 FIX: Add import for R if not exists
-            if ! grep -q "import.*R;" "app/src/main/java/$PKG_PATH/MainActivity.java"; then
-              sed -i "3iimport $TARGET_PACKAGE.R;" "app/src/main/java/$PKG_PATH/MainActivity.java"
-            fi
-          else
-            echo "📄 Creating default MainActivity"
-            cat <<EOF > "app/src/main/java/$PKG_PATH/MainActivity.java"
+          # MainActivity
+          cat <<EOF > "app/src/main/java/$PKG_PATH/MainActivity.java"
           package $TARGET_PACKAGE;
-          
           import android.os.Bundle;
-          import android.widget.TextView;
           import androidx.appcompat.app.AppCompatActivity;
-          import $TARGET_PACKAGE.R;
-          
           public class MainActivity extends AppCompatActivity {
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   setContentView(R.layout.activity_main);
-                  
-                  TextView textView = findViewById(R.id.tvHello);
-                  if (textView != null) {
-                      textView.setText("$APP_NAME");
-                  }
               }
           }
           EOF
-          fi
-          
-          echo "📄 MainActivity.java:"
-          cat "app/src/main/java/$PKG_PATH/MainActivity.java"
 
-      - name: Create Layout
-        run: |
-          # Check if layout exists in payload
-          if [ -f extracted_payload/res/layout/activity_main.xml ]; then
-            cp extracted_payload/res/layout/activity_main.xml app/src/main/res/layout/activity_main.xml
-            echo "✅ Layout copied from payload"
-          else
-            cat <<EOF > app/src/main/res/layout/activity_main.xml
+          # Layout
+          cat <<EOF > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
               android:layout_height="match_parent"
               android:gravity="center"
-              android:orientation="vertical"
-              android:background="#FFFFFF">
+              android:orientation="vertical">
               <TextView
                   android:id="@+id/tvHello"
                   android:layout_width="wrap_content"
                   android:layout_height="wrap_content"
                   android:text="$APP_NAME"
-                  android:textSize="28sp"
-                  android:textColor="#000000"
-                  android:textStyle="bold"/>
+                  android:textSize="20sp"/>
           </LinearLayout>
           EOF
-            echo "✅ Created default layout"
-          fi
 
-      - name: Create AndroidManifest
-        run: |
-          # Check if manifest exists in payload
-          if [ -f extracted_payload/AndroidManifest.xml ]; then
-            cp extracted_payload/AndroidManifest.xml app/src/main/AndroidManifest.xml
-            echo "✅ Manifest copied from payload"
-            # Remove package attribute if exists
-            sed -i 's/package="[^"]*"//g' app/src/main/AndroidManifest.xml
-          else
-            cat <<EOF > app/src/main/AndroidManifest.xml
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <application
-                  android:allowBackup="true"
-                  android:label="$APP_NAME"
-                  android:theme="@style/Theme.App">
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-            echo "✅ Created default manifest"
-          fi
-          
-          # Override app name
-          sed -i "s|android:label=\"[^\"]*\"|android:label=\"$APP_NAME\"|g" app/src/main/AndroidManifest.xml
-
-      - name: Create Resources
-        run: |
-          cat <<EOF > app/src/main/res/values/themes.xml
-          <resources>
-              <style name="Theme.App" parent="Theme.AppCompat.Light.NoActionBar">
-                  <item name="colorPrimary">#6200EE</item>
-                  <item name="android:windowBackground">#FFFFFF</item>
-              </style>
-          </resources>
-          EOF
-          
-          cat <<EOF > app/src/main/res/values/strings.xml
-          <resources>
-              <string name="app_name">$APP_NAME</string>
-          </resources>
-          EOF
-          
-          cat <<EOF > app/src/main/res/values/colors.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="colorPrimary">#6200EE</color>
-              <color name="white">#FFFFFF</color>
-              <color name="black">#000000</color>
-          </resources>
-          EOF
-
-      - name: Copy Custom Icon
-        run: |
-          if [ -f extracted_payload/app_icon.png ]; then
-            mkdir -p app/src/main/res/drawable
-            cp extracted_payload/app_icon.png app/src/main/res/drawable/ic_launcher.png
-            echo "✅ Custom icon copied"
-          fi
-
-      - name: Setup Gradle
+      - name: Create Build Files
         run: |
           cat <<EOF > settings.gradle
-          pluginManagement {
-              repositories { google(); mavenCentral(); gradlePluginPortal() }
-          }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories { google(); mavenCentral() }
-          }
           rootProject.name = "SystemPro"
           include ":app"
           EOF
           
           cat <<EOF > app/build.gradle
           plugins { id 'com.android.application' }
-          
           android {
               namespace '$TARGET_PACKAGE'
               compileSdk 34
-              
               defaultConfig {
                   applicationId '$TARGET_PACKAGE'
                   minSdk 21
@@ -241,13 +123,11 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
-              
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
               }
           }
-          
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
           }
@@ -255,12 +135,12 @@ jobs:
 
       - name: Build APK
         run: |
-          gradle wrapper --gradle-version 8.5
+          # گریڈل ورژن 8.5 کو زبردستی لاک کرنا
+          gradle wrapper --gradle-version 8.5 --gradle-distribution-checksum-verification=off
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK
-        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.APP_NAME }}-App
