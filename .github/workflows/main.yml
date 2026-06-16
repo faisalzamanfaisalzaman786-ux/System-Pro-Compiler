@@ -32,7 +32,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '17'
+          java-version: '11'
 
       - name: Initialize Environment
         run: |
@@ -80,6 +80,9 @@ jobs:
       - name: Clean Old Java Files
         run: |
           rm -rf app/src/main/java/com 2>/dev/null || true
+          rm -rf app/src/main/java/org 2>/dev/null || true
+          rm -rf app/src/main/java/io 2>/dev/null || true
+          rm -rf app/src/main/java/net 2>/dev/null || true
           rm -rf app/src/main/java/* 2>/dev/null || true
           echo "Old Java files cleaned"
 
@@ -96,6 +99,7 @@ jobs:
             cp "$file" "app/src/main/java/$PKG_PATH/"
             echo "Copied: $(basename $file)"
           done
+          echo "Java files copied"
 
       - name: Update Java Package Names
         run: |
@@ -103,6 +107,7 @@ jobs:
           for file in app/src/main/java/$PKG_PATH/*.java; do
             if [ -f "$file" ]; then
               sed -i "s/^package .*;/package $TARGET_PACKAGE;/g" "$file"
+              echo "Updated package in: $(basename $file)"
             fi
           done
 
@@ -228,9 +233,13 @@ jobs:
           echo '        versionName "1.0"' >> app/build.gradle
           echo '    }' >> app/build.gradle
           echo '' >> app/build.gradle
+          echo '    buildFeatures {' >> app/build.gradle
+          echo '        viewBinding true' >> app/build.gradle
+          echo '    }' >> app/build.gradle
+          echo '' >> app/build.gradle
           echo '    compileOptions {' >> app/build.gradle
-          echo '        sourceCompatibility JavaVersion.VERSION_17' >> app/build.gradle
-          echo '        targetCompatibility JavaVersion.VERSION_17' >> app/build.gradle
+          echo '        sourceCompatibility JavaVersion.VERSION_1_8' >> app/build.gradle
+          echo '        targetCompatibility JavaVersion.VERSION_1_8' >> app/build.gradle
           echo '    }' >> app/build.gradle
           echo '}' >> app/build.gradle
           echo '' >> app/build.gradle
@@ -257,9 +266,11 @@ jobs:
       - name: Build APK
         run: |
           chmod +x gradlew
+          echo "Cleaning old builds..."
           ./gradlew clean --no-daemon || true
           rm -rf app/build
           rm -rf .gradle
+          echo "Building APK..."
           ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
       - name: Verify APK
@@ -269,6 +280,8 @@ jobs:
             echo "✅ APK built successfully! Size: $APK_SIZE"
           else
             echo "❌ APK not found"
+            echo "Listing build directory..."
+            ls -la app/build/outputs/apk/debug/ 2>/dev/null || echo "No APK found"
             exit 1
           fi
 
@@ -285,6 +298,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Build-Error-Logs
-          path: app/build/reports/
+          path: |
+            app/build/reports/
+            app/build/outputs/logs/
           retention-days: 3
           if-no-files-found: ignore
