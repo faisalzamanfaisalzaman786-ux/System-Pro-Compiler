@@ -49,18 +49,12 @@ jobs:
             exit 1
           fi
 
-          # پرانے جاوا، لے آؤٹ اور ریسورسز کو مکمل صاف کریں
           rm -rf app/src/main/java/*
           rm -rf app/src/main/res/layout/*
           rm -rf app/src/main/res/values/*
           rm -rf app/src/main/res/drawable/*
           rm -rf app/src/main/res/xml/*
-          
-          mkdir -p extracted_payload
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/xml
-          mkdir -p app/src/main/res/drawable
+          mkdir -p extracted_payload app/src/main/res/layout app/src/main/res/values app/src/main/res/xml app/src/main/res/drawable
 
       - name: Process Payload
         run: |
@@ -74,55 +68,50 @@ jobs:
         run: |
           PKG_PATH=$(echo "$TARGET_PACKAGE" | tr '.' '/')
           mkdir -p "app/src/main/java/$PKG_PATH"
-          
-          echo 'package '"$TARGET_PACKAGE"';' > "app/src/main/java/$PKG_PATH/MainActivity.java"
-          cat >> "app/src/main/java/$PKG_PATH/MainActivity.java" <<EOF
-
-import android.os.Bundle;
-import androidx.appcompat.app.AppCompatActivity;
-
-public class MainActivity extends AppCompatActivity {
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-    }
-}
-EOF
-          echo "Created fresh MainActivity.java in $PKG_PATH"
+          cat <<EOF > "app/src/main/java/$PKG_PATH/MainActivity.java"
+          package $TARGET_PACKAGE;
+          import android.os.Bundle;
+          import androidx.appcompat.app.AppCompatActivity;
+          public class MainActivity extends AppCompatActivity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setContentView(R.layout.activity_main);
+              }
+          }
+          EOF
 
       - name: Copy Resources
         run: |
           [ -d extracted_payload/res/layout ] && cp -rn extracted_payload/res/layout/* app/src/main/res/layout/ 2>/dev/null || true
           [ -d extracted_payload/res/values ] && cp -rn extracted_payload/res/values/* app/src/main/res/values/ 2>/dev/null || true
           [ -d extracted_payload/res/drawable ] && cp -rn extracted_payload/res/drawable/* app/src/main/res/drawable/ 2>/dev/null || true
-          [ -f extracted_payload/AndroidManifest.xml ] && cp extracted_payload/AndroidManifest.xml app/src/main/AndroidManifest.xml
+          [ -f extracted_payload/AndroidManifest.xml ] && cp extracted_payload/AndroidManifest.xml app/src/main/AndroidManifest.xml || true
 
       - name: Generate Gradle Files
         run: |
           echo 'rootProject.name = "SystemPro"' > settings.gradle
           echo 'include ":app"' >> settings.gradle
-
           cat <<EOF > app/build.gradle
-plugins {
-    id 'com.android.application'
-}
-android {
-    namespace '$TARGET_PACKAGE'
-    compileSdk 34
-    defaultConfig {
-        applicationId '$TARGET_PACKAGE'
-        minSdk 21
-        targetSdk 34
-        versionCode 1
-        versionName "1.0"
-    }
-}
-dependencies {
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.11.0'
-}
-EOF
+          plugins {
+              id 'com.android.application'
+          }
+          android {
+              namespace '$TARGET_PACKAGE'
+              compileSdk 34
+              defaultConfig {
+                  applicationId '$TARGET_PACKAGE'
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+          }
+          EOF
 
       - name: Build APK
         run: |
